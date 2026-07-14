@@ -12,6 +12,7 @@ import {
   Puzzle,
   Search,
   X,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Favorite, TauriError } from "@/lib/tauri";
@@ -21,6 +22,7 @@ import { listen } from "@tauri-apps/api/event";
 const NAV = [
   { to: "/library", label: "命令库", icon: Library },
   { to: "/workflows", label: "工作流", icon: Workflow },
+  { to: "/templates", label: "模板市场", icon: LayoutGrid },
   { to: "/runner", label: "执行", icon: PlayCircle },
   { to: "/history", label: "历史", icon: History },
   { to: "/schedules", label: "调度", icon: CalendarClock },

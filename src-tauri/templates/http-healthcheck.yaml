@@ -1,0 +1,48 @@
+version: 1
+kind: workflow
+metadata:
+  name: HTTP 健康检查
+  description: 周期性 ping 一个 URL,记录状态码,失败时打 stderr(可接通知)
+  trigger: manual
+nodes:
+  - id: n_ping
+    type: http
+    config:
+      method: GET
+      url: "https://example.com"
+      headers:
+        User-Agent: "cmdflow-healthcheck"
+      timeout_ms: 10000
+    position: { x: 0, y: 0 }
+  - id: n_judge
+    type: condition
+    config:
+      expression: "n_ping.exit_code == 0"
+      true_label: 通
+      false_label: 不通
+    position: { x: 280, y: 0 }
+  - id: n_ok
+    type: script
+    config:
+      language: pwsh
+      code: |
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] OK"
+        Write-Host "耗时: $(([DateTime]::UtcNow - $ctx.from.n_ping.started_at).TotalMilliseconds) ms"
+    position: { x: 560, y: -100 }
+  - id: n_fail
+    type: script
+    config:
+      language: pwsh
+      code: |
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] FAIL exit_code={{n_ping.exit_code}}"
+        $host.ui.WriteErrorLine("健康检查失败")
+    position: { x: 560, y: 100 }
+edges:
+  - from: n_ping
+    to: n_judge
+  - from: n_judge
+    to: n_ok
+    label: "true"
+  - from: n_judge
+    to: n_fail
+    label: "false"

@@ -110,6 +110,10 @@ pub fn run() {
             // ===== YAML 导入导出 (Phase 8) =====
             commands::yaml_io::export_workflow,
             commands::yaml_io::import_workflow,
+            // ===== 模板市场 (Phase 9.2) =====
+            commands::templates::list_templates,
+            commands::templates::get_template,
+            commands::templates::import_template,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

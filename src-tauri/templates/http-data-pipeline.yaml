@@ -1,0 +1,49 @@
+version: 1
+kind: workflow
+metadata:
+  name: HTTP 数据抓取
+  description: 调用 HTTP 接口拿到 JSON 数据,写入本地文件,适合做周期性的数据快照
+  trigger: manual
+nodes:
+  - id: n_fetch
+    type: http
+    config:
+      method: GET
+      url: "https://api.github.com/repos/ZhSMM/CmdFlow"
+      headers:
+        Accept: "application/vnd.github+json"
+        User-Agent: "cmdflow"
+      timeout_ms: 30000
+    position: { x: 0, y: 0 }
+  - id: n_check
+    type: condition
+    config:
+      expression: "n_fetch.exit_code == 0"
+      true_label: OK
+      false_label: 失败
+    position: { x: 280, y: 0 }
+  - id: n_save
+    type: file
+    config:
+      action: write
+      dst: "./snapshots/cmdflow.json"
+      content: "{{n_fetch.stdout}}"
+    position: { x: 560, y: -100 }
+  - id: n_log_err
+    type: script
+    config:
+      language: pwsh
+      code: |
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] HTTP 请求失败"
+        Write-Host "退出码: {{n_fetch.exit_code}}"
+        if ($env:SNAPSHOT_DIR) { Write-Host "快照目录: $env:SNAPSHOT_DIR" }
+    position: { x: 560, y: 100 }
+edges:
+  - from: n_fetch
+    to: n_check
+  - from: n_check
+    to: n_save
+    label: "true"
+  - from: n_check
+    to: n_log_err
+    label: "false"

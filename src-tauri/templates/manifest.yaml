@@ -1,0 +1,26 @@
+# 模板清单 (与 templates/*.yaml 配套)
+# 加载时按 id 关联元数据,前端展示用
+- id: git-deploy
+  category: 开发工具
+  tags: [git, devops]
+  icon: GitBranch
+- id: docker-build-push
+  category: DevOps
+  tags: [docker, build, push]
+  icon: Container
+- id: log-cleanup
+  category: 维护
+  tags: [file, cleanup, maintenance]
+  icon: Trash2
+- id: http-data-pipeline
+  category: 数据
+  tags: [http, file, snapshot]
+  icon: Database
+- id: daily-backup
+  category: 维护
+  tags: [backup, zip, cron]
+  icon: Archive
+- id: http-healthcheck
+  category: 监控
+  tags: [http, monitor, cron]
+  icon: Activity

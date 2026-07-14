@@ -1,0 +1,52 @@
+version: 1
+kind: workflow
+metadata:
+  name: 目录压缩备份
+  description: 把指定目录压缩成 zip(带时间戳),保存到备份目录,可选上传到远端
+  trigger: manual
+nodes:
+  - id: n_prepare
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $src = if ($env:BACKUP_SRC) { $env:BACKUP_SRC } else { "./data" }
+        $dstDir = if ($env:BACKUP_DST) { $env:BACKUP_DST } else { "./backups" }
+        if (-not (Test-Path $dstDir)) { New-Item -ItemType Directory -Path $dstDir | Out-Null }
+        $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+        $env:BACKUP_FILE = Join-Path $dstDir "backup-$stamp.zip"
+        Write-Host "源目录: $src"
+        Write-Host "备份到: $($env:BACKUP_FILE)"
+    position: { x: 0, y: 0 }
+  - id: n_zip
+    type: script
+    config:
+      language: pwsh
+      code: |
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $src = if ($env:BACKUP_SRC) { $env:BACKUP_SRC } else { "./data" }
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+          (Resolve-Path $src),
+          $env:BACKUP_FILE
+        )
+        $size = (Get-Item $env:BACKUP_FILE).Length
+        Write-Host "备份完成,大小: $([int]($size / 1024)) KB"
+      timeout_ms: 300000
+    position: { x: 280, y: 0 }
+  - id: n_cleanup
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $dstDir = if ($env:BACKUP_DST) { $env:BACKUP_DST } else { "./backups" }
+        Get-ChildItem -Path $dstDir -Filter "backup-*.zip" |
+          Sort-Object LastWriteTime -Descending |
+          Select-Object -Skip 7 |
+          Remove-Item -Force
+        Write-Host "已清理过期备份(保留最新 7 份)"
+    position: { x: 560, y: 0 }
+edges:
+  - from: n_prepare
+    to: n_zip
+  - from: n_zip
+    to: n_cleanup

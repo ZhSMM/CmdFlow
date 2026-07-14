@@ -1,0 +1,48 @@
+version: 1
+kind: workflow
+metadata:
+  name: Git 提交推送
+  description: 检查 git 状态 → add → commit → push,适合定时把本地变更推上去
+  trigger: manual
+nodes:
+  - id: n_check
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $status = git status --short
+        if ($LASTEXITCODE -ne 0) {
+          throw "当前目录不是 git 仓库"
+        }
+        if ([string]::IsNullOrWhiteSpace($status)) {
+          Write-Host "没有变更需要提交"
+        } else {
+          Write-Host $status
+        }
+    position: { x: 0, y: 0 }
+  - id: n_add
+    type: script
+    config:
+      language: pwsh
+      code: "git add -A"
+    position: { x: 280, y: 0 }
+  - id: n_commit
+    type: script
+    config:
+      language: pwsh
+      code: 'git commit -m "chore: auto-commit $(Get-Date -Format ''yyyy-MM-dd HH:mm'')"'
+    position: { x: 560, y: 0 }
+  - id: n_push
+    type: script
+    config:
+      language: pwsh
+      code: "git push origin HEAD"
+      timeout_ms: 60000
+    position: { x: 840, y: 0 }
+edges:
+  - from: n_check
+    to: n_add
+  - from: n_add
+    to: n_commit
+  - from: n_commit
+    to: n_push

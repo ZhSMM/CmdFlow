@@ -498,7 +498,27 @@ export const api = {
     exportWorkflow: (id: string) => call<string>("export_workflow", { id }),
     importWorkflow: (yaml: string) => call<YamlImportResult>("import_workflow", { yaml }),
   },
+  template: {
+    list: () => call<TemplateSummary[]>("list_templates"),
+    get: (id: string) => call<string>("get_template", { id }),
+    import: (id: string, new_name?: string) =>
+      call<YamlImportResult>("import_template", { id, newName: new_name }),
+  },
 };
+
+// ==================== 模板 (Phase 9.2) ====================
+
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  icon: string;
+  node_count: number;
+  edge_count: number;
+  builtin: boolean;
+}
 
 export interface CreateCommandInput {
   name: string;

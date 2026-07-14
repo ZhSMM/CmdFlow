@@ -1,0 +1,48 @@
+version: 1
+kind: workflow
+metadata:
+  name: 日志清理
+  description: 扫描目录下的旧日志文件,展示列表(dry-run 模式,可改 delete 节点真正删除)
+  trigger: manual
+nodes:
+  - id: n_list
+    type: file
+    config:
+      action: list
+      src: "./logs"
+      pattern: "**/*.log"
+    position: { x: 0, y: 0 }
+  - id: n_filter
+    type: condition
+    config:
+      expression: "n_list.value.length > 0"
+      true_label: 有文件
+      false_label: 空
+    position: { x: 280, y: 0 }
+  - id: n_summary
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $files = (Get-ChildItem -Path "./logs" -Recurse -Filter "*.log" -ErrorAction SilentlyContinue)
+        Write-Host "找到 $($files.Count) 个日志文件 (dry-run,未删除)"
+        $files | Select-Object -First 10 | ForEach-Object {
+          Write-Host (" - {0} ({1} KB)" -f $_.FullName, [int]($_.Length / 1024))
+        }
+    position: { x: 560, y: -100 }
+  - id: n_delete
+    type: file
+    config:
+      action: delete
+      src: "./logs"
+      pattern: "**/*.log"
+    position: { x: 560, y: 100 }
+edges:
+  - from: n_list
+    to: n_filter
+  - from: n_filter
+    to: n_summary
+    label: "false"
+  - from: n_filter
+    to: n_delete
+    label: "true"

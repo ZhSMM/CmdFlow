@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Workflow } from "@/lib/tauri";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Workflow as WorkflowIcon, Plus, Trash2, Play, FileUp } from "lucide-react";
+import { Workflow as WorkflowIcon, Plus, Trash2, Play, FileUp, LayoutGrid } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/Button";
@@ -84,6 +84,10 @@ export function WorkflowsPage() {
         <Button onClick={() => setShowNew(true)}>
           <Plus className="h-4 w-4" />
           新建工作流
+        </Button>
+        <Button variant="outline" onClick={() => nav("/templates")}>
+          <LayoutGrid className="h-4 w-4" />
+          模板市场
         </Button>
         <Button variant="outline" onClick={onImport} disabled={importYaml.isPending}>
           <FileUp className="h-4 w-4" />

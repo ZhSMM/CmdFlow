@@ -1,0 +1,51 @@
+version: 1
+kind: workflow
+metadata:
+  name: Docker 构建并推送
+  description: docker build → 打 tag → 推送到镜像仓库(默认推 docker.io,可改 registry)
+  trigger: manual
+nodes:
+  - id: n_env
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $reg = if ($env:REGISTRY) { $env:REGISTRY } else { 'docker.io' }
+        $name = if ($env:IMAGE_NAME) { $env:IMAGE_NAME } else { 'myapp' }
+        $tag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { 'latest' }
+        $env:FULL_IMAGE = "$reg/$name`:$tag"
+        Write-Host "将构建: $env:FULL_IMAGE"
+    position: { x: 0, y: 0 }
+  - id: n_build
+    type: script
+    config:
+      language: pwsh
+      code: "docker build -t $env:FULL_IMAGE ."
+      timeout_ms: 600000
+    position: { x: 280, y: 0 }
+  - id: n_login
+    type: script
+    config:
+      language: pwsh
+      code: |
+        $reg = if ($env:REGISTRY) { $env:REGISTRY } else { 'docker.io' }
+        if ($env:DOCKER_USER -and $env:DOCKER_PASS) {
+          $env:DOCKER_PASS | docker login $reg -u $env:DOCKER_USER --password-stdin
+        } else {
+          Write-Host "未配置 DOCKER_USER/DOCKER_PASS, 跳过登录"
+        }
+    position: { x: 560, y: 0 }
+  - id: n_push
+    type: script
+    config:
+      language: pwsh
+      code: "docker push $env:FULL_IMAGE"
+      timeout_ms: 600000
+    position: { x: 840, y: 0 }
+edges:
+  - from: n_env
+    to: n_build
+  - from: n_build
+    to: n_login
+  - from: n_login
+    to: n_push

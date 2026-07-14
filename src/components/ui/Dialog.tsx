@@ -10,6 +10,8 @@ interface DialogProps {
   children?: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  /** Tailwind max-w-* class, e.g. "max-w-2xl" */
+  maxWidth?: string;
 }
 
 export function Dialog({
@@ -20,6 +22,7 @@ export function Dialog({
   children,
   footer,
   className,
+  maxWidth,
 }: DialogProps) {
   useEffect(() => {
     if (!open) return;
@@ -40,6 +43,7 @@ export function Dialog({
       <div
         className={cn(
           "max-h-[85vh] w-full max-w-lg overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg",
+          maxWidth,
           className,
         )}
         onClick={(e) => e.stopPropagation()}
