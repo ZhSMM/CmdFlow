@@ -476,6 +476,8 @@ export const api = {
     remove: (id: string) => call<void>("delete_category", { id }),
     moveCommand: (command_id: string, category_id: string | null) =>
       call<void>("move_command", { input: { command_id, category_id } }),
+    reorder: (ordered_ids: string[]) =>
+      call<void>("reorder_categories", { input: { ordered_ids } }),
   },
   favorite: {
     list: () => call<Favorite[]>("list_favorites"),

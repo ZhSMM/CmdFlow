@@ -241,6 +241,30 @@ pub async fn move_command(state: State<'_, AppState>, input: MoveCommandInput) -
     Ok(())
 }
 
+#[derive(Deserialize)]
+pub struct ReorderCategoriesInput {
+    /// 完整的有序 ID 列表 (从最顶层开始, 按 depth-first 顺序)
+    pub ordered_ids: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn reorder_categories(
+    state: State<'_, AppState>,
+    input: ReorderCategoriesInput,
+) -> AppResult<()> {
+    let conn = state.db.get()?;
+    let tx = conn.unchecked_transaction()?;
+    for (i, id) in input.ordered_ids.iter().enumerate() {
+        if id == "__root__" { continue; }
+        tx.execute(
+            "UPDATE categories SET sort_order = ?1 WHERE id = ?2",
+            rusqlite::params![i as i32, id],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 // ==================== 内部辅助 ====================
 
 fn compute_depth(conn: &rusqlite::Connection, id: &str) -> AppResult<i32> {

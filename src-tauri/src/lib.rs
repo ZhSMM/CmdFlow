@@ -96,6 +96,7 @@ pub fn run() {
             commands::category::move_category,
             commands::category::delete_category,
             commands::category::move_command,
+            commands::category::reorder_categories,
             // ===== 收藏 (Phase 7) =====
             commands::favorite::list_favorites,
             commands::favorite::add_favorite,
