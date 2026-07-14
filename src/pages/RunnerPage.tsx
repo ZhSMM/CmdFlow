@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,8 @@ import {
   Loader2,
   CheckCircle2,
   History as HistoryIcon,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
 import { api, onRunEvent, type RunEvent, type CommandPreview, type CommandDetail, TauriError } from "@/lib/tauri";
 import { Button } from "@/components/ui/Button";
@@ -18,13 +20,20 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ParamField } from "@/components/forms/ParamField";
 import { Dialog } from "@/components/ui/Dialog";
 import { Terminal, type TerminalHandle } from "@/components/runner/Terminal";
-import { cn, formatDuration } from "@/lib/utils";
+import { cn, formatDuration, formatDate } from "@/lib/utils";
+import {
+  getParamHistory,
+  pushParamHistory,
+  formatHistoryPreview,
+  type ParamHistoryEntry,
+} from "@/lib/paramHistory";
 
 type RunState = "idle" | "previewing" | "ready" | "running" | "success" | "failed" | "cancelled" | "timeout";
 
 export function RunnerPage() {
-  const [params] = useSearchParams();
-  const initialCmdId = params.get("cmd");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialCmdId = searchParams.get("cmd");
+  const initialParams = searchParams.get("params");
   const qc = useQueryClient();
 
   const [commandId, setCommandId] = useState<string | null>(initialCmdId);
@@ -37,9 +46,9 @@ export function RunnerPage() {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const termRef = useRef<TerminalHandle>(null);
-  const isMounted = useRef(true);
 
   const commands = useQuery({
     queryKey: ["commands"],
@@ -52,6 +61,20 @@ export function RunnerPage() {
     enabled: !!commandId,
   });
 
+  // 从 history 页面 ?params=xxx 传过来时，预填
+  useEffect(() => {
+    if (initialParams) {
+      try {
+        const parsed = JSON.parse(initialParams);
+        if (parsed && typeof parsed === "object") {
+          setValues(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [initialParams]);
+
   // 切换命令时重置
   useEffect(() => {
     setValues({});
@@ -61,28 +84,36 @@ export function RunnerPage() {
     setExecutionId(null);
     setError(null);
     setExitCode(null);
+    setHistoryOpen(false);
+    // 清掉 url 上的 params，避免下次切命令还残留
+    if (searchParams.has("params")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("params");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandId]);
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+  // 当前命令的参数历史（localStorage）
+  const paramHistory: ParamHistoryEntry[] = useMemo(() => {
+    if (!commandId) return [];
+    return getParamHistory(commandId);
+  }, [commandId, runState, executionId]);
+
+  const sensitiveParamNames = useMemo(
+    () => (detail.data?.params ?? []).filter((p) => p.sensitive).map((p) => p.name),
+    [detail.data],
+  );
 
   // 订阅执行事件
   useEffect(() => {
     if (!executionId) return;
 
-    console.log("[RunnerPage] subscribing to run-event for", executionId);
     const unlistenPromise = onRunEvent((e: RunEvent) => {
       if ((e as any).execution_id !== executionId) return;
-      console.log("[RunnerPage] event", e.kind, e);
       switch (e.kind) {
         case "execution_started":
-          termRef.current?.clear();
-          termRef.current?.writeln(
-            `\x1b[36m▶ 开始执行: ${e.command_name}\x1b[0m\r\n`,
-          );
+          // 不再依赖事件清屏 — doRun 开头已经清了
           break;
         case "node_log":
           if (e.stream === "stderr") {
@@ -99,9 +130,6 @@ export function RunnerPage() {
         case "execution_finished":
           setRunState(e.status as RunState);
           setError(e.error);
-          termRef.current?.writeln(
-            `\r\n\x1b[${e.status === "success" ? "32" : "31"}m■ 执行结束: ${e.status} · ${formatDuration(e.duration_ms)}\x1b[0m`,
-          );
           qc.invalidateQueries({ queryKey: ["executions"] });
           break;
         case "execution_cancelled":
@@ -112,7 +140,6 @@ export function RunnerPage() {
 
     return () => {
       unlistenPromise.then((u) => u());
-      console.log("[RunnerPage] unsubscribed for", executionId);
     };
   }, [executionId, qc]);
 
@@ -136,7 +163,6 @@ export function RunnerPage() {
 
   const doRun = async (override = false) => {
     if (!commandId) return;
-    console.log("[doRun] start", { commandId, override });
     setError(null);
     setRunState("running");
     setShowConfirm(false);
@@ -149,45 +175,27 @@ export function RunnerPage() {
         params: values,
         override_safety: override,
       });
-      console.log("[doRun] got response", {
-        exec_id: res.execution_id,
-        status: res.status,
-        exit_code: res.exit_code,
-        duration_ms: res.duration_ms,
-        stdout_len: res.stdout?.length ?? 0,
-        stderr_len: res.stderr?.length ?? 0,
-        error: res.error,
-        stdout_preview: (res.stdout ?? "").slice(0, 200),
-        stderr_preview: (res.stderr ?? "").slice(0, 200),
-      });
       setExecutionId(res.execution_id);
-      // 后端现在同步 await 执行完成并回显完整结果，
-      // 这里把退出码、状态、错误直接写回 UI，避免依赖事件时序。
       setExitCode(res.exit_code);
       setRunState(res.status as RunState);
       if (res.error) {
         setError(res.error);
       }
-      const termOk = !!termRef.current;
-      console.log("[doRun] termRef.current is", termOk ? "set" : "null");
       if (res.stdout) {
-        console.log(`[doRun] writing stdout len=${res.stdout.length} to terminal`);
         termRef.current?.write(res.stdout);
-      } else {
-        console.log("[doRun] stdout is empty");
       }
       if (res.stderr) {
-        console.log(`[doRun] writing stderr len=${res.stderr.length} to terminal`);
         termRef.current?.write(`\x1b[31m${res.stderr}\x1b[0m`);
-      } else {
-        console.log("[doRun] stderr is empty");
       }
       termRef.current?.writeln(
         `\r\n\x1b[${res.status === "success" ? "32" : "31"}m■ 执行结束: ${res.status} · ${formatDuration(res.duration_ms)}\x1b[0m`,
       );
+      // 成功执行后写入参数历史
+      if (res.status === "success" || res.status === "failed") {
+        pushParamHistory(commandId, values, sensitiveParamNames);
+      }
       qc.invalidateQueries({ queryKey: ["executions"] });
     } catch (e) {
-      console.error("[doRun] exception", e);
       setError((e as TauriError).message);
       setRunState("failed");
     }
@@ -196,6 +204,11 @@ export function RunnerPage() {
   const doCancel = async () => {
     if (!executionId) return;
     await api.execution.cancel(executionId);
+  };
+
+  const applyHistoryEntry = (entry: ParamHistoryEntry) => {
+    setValues(entry.values);
+    setHistoryOpen(false);
   };
 
   return (
@@ -245,12 +258,20 @@ export function RunnerPage() {
               </div>
             )}
             {commandId && detail.data && (
-              <CommandParamForm
-                detail={detail.data}
-                values={values}
-                onChange={(name, v) => setValues((prev) => ({ ...prev, [name]: v }))}
-                disabled={runState === "running"}
-              />
+              <div className="space-y-3">
+                <ParamHistoryBar
+                  entries={paramHistory}
+                  open={historyOpen}
+                  onToggle={() => setHistoryOpen((v) => !v)}
+                  onPick={applyHistoryEntry}
+                />
+                <CommandParamForm
+                  detail={detail.data}
+                  values={values}
+                  onChange={(name, v) => setValues((prev) => ({ ...prev, [name]: v }))}
+                  disabled={runState === "running"}
+                />
+              </div>
             )}
           </div>
 
@@ -295,7 +316,7 @@ export function RunnerPage() {
                   runState === "success" ? "text-green-600" : "text-destructive",
                 )}
               >
-                退出码: {exitCode} · {runState} · {formatDuration(detail.data?.version.timeout_ms ?? undefined)}
+                退出码: {exitCode} · {runState}
               </div>
             )}
           </div>
@@ -440,6 +461,58 @@ export function RunnerPage() {
           </p>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+/** 历史参数条 — 显示最近 N 次使用的参数，点击展开下拉 */
+function ParamHistoryBar({
+  entries,
+  open,
+  onToggle,
+  onPick,
+}: {
+  entries: ParamHistoryEntry[];
+  open: boolean;
+  onToggle: () => void;
+  onPick: (e: ParamHistoryEntry) => void;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="rounded-md border bg-muted/30">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 py-1.5 text-xs"
+      >
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          历史参数 ({entries.length})
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-t">
+          {entries.map((e, i) => (
+            <button
+              key={i}
+              onClick={() => onPick(e)}
+              className="flex w-full items-center justify-between gap-2 border-b px-3 py-1.5 text-left text-xs last:border-b-0 hover:bg-accent/40"
+            >
+              <code className="truncate font-mono text-[11px]">
+                {formatHistoryPreview(e.values)}
+              </code>
+              <span className="shrink-0 text-[10px] text-muted-foreground">
+                {formatDate(e.used_at)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

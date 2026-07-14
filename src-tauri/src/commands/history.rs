@@ -52,10 +52,17 @@ pub async fn list_history(
     let conn = state.db.get()?;
     let limit = limit.unwrap_or(50);
 
+    // workflow_id 字段同时存了 workflow id 和 command id (Phase 1 设计)
+    // 用 COALESCE 优先拿 commands.name，拿不到再退到 workflows.name
     let mut sql = String::from(
-        "SELECT e.id, e.workflow_id, COALESCE(w.name, '?') as workflow_name, e.trigger, e.status,
+        "SELECT e.id, e.workflow_id,
+                COALESCE(c.name, w.name, '?') as workflow_name,
+                e.trigger, e.status,
                 e.started_at, e.finished_at, e.duration_ms, e.error
-         FROM executions e LEFT JOIN workflows w ON w.id = e.workflow_id WHERE 1=1",
+         FROM executions e
+         LEFT JOIN workflows w ON w.id = e.workflow_id
+         LEFT JOIN commands  c ON c.id = e.workflow_id
+         WHERE 1=1",
     );
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     if let Some(wid) = workflow_id {
@@ -98,9 +105,13 @@ pub async fn get_history_detail(
     let conn = state.db.get()?;
 
     let summary: HistorySummary = conn.query_row(
-        "SELECT e.id, e.workflow_id, COALESCE(w.name, '?') as workflow_name, e.trigger, e.status,
+        "SELECT e.id, e.workflow_id,
+                COALESCE(c.name, w.name, '?') as workflow_name,
+                e.trigger, e.status,
                 e.started_at, e.finished_at, e.duration_ms, e.error
-         FROM executions e LEFT JOIN workflows w ON w.id = e.workflow_id
+         FROM executions e
+         LEFT JOIN workflows w ON w.id = e.workflow_id
+         LEFT JOIN commands  c ON c.id = e.workflow_id
          WHERE e.id = ?1",
         [&id],
         |r| Ok(HistorySummary {
@@ -173,7 +184,40 @@ pub async fn replay_execution(
     ).map_err(|_| AppError::not_found(format!("execution:{execution_id}")))?;
     drop(conn);
 
-    // 2. 用相同 workflow + params 触发
+    // workflow_id 字段既存 workflow 也存 command (Phase 1 设计)
+    // 先看 commands 表，能找到就走「直接重放命令」路径
+    let conn = state.db.get()?;
+    let is_command: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM commands WHERE id = ?1)",
+            [&workflow_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(false);
+    drop(conn);
+
+    if is_command {
+        // 直接命令重放 — 走 executor 的同一路径
+        let input_params_value: serde_json::Value = input_params_str
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        let input_params_map: std::collections::HashMap<String, serde_json::Value> =
+            match input_params_value {
+                serde_json::Value::Object(m) => m.into_iter().collect(),
+                _ => std::collections::HashMap::new(),
+            };
+        let result = crate::commands::execution::replay_direct_command(
+            app,
+            state.db.clone(),
+            state.execution_registry.clone(),
+            workflow_id,
+            input_params_map,
+        )
+        .await?;
+        return Ok(result);
+    }
+
+    // 2. 当作 workflow 走原路径
     let detail = crate::storage::models::WorkflowDetail::load_full(&state.db, &workflow_id)?
         .ok_or_else(|| AppError::not_found(format!("workflow:{workflow_id}")))?;
 

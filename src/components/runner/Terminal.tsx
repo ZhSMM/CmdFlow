@@ -35,13 +35,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const bufferRef = useRef<BufferedOp[]>([]);
 
     useEffect(() => {
-      console.log("[Terminal] mount, loading xterm...");
       if (!containerRef.current) return;
 
       // StrictMode 下 effect 会被双调用：第一次的 cleanup 会在 async 完成前跑，
       // `dispose` 还来不及赋值，导致第一个 xterm 永远不被释放，叠在容器上。
       // 用 cancelled 标记：cleanup 立即置 true，async 完成时如果 cancelled 就
-      // 直接 dispose 掉刚创建好的 xterm，杜绝双实例。
+      // 直接放弃创建，杜绝双实例。
       let cancelled = false;
       let term: XTerm | null = null;
       let fit: FitAddon | null = null;
@@ -56,20 +55,15 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 
       // 动态 import xterm (~310KB) - 不进主 bundle
       (async () => {
-        const t0 = performance.now();
         const [{ Terminal: XTerm }, { FitAddon }, cssMod] = await Promise.all([
           import("@xterm/xterm"),
           import("@xterm/addon-fit"),
           import("@xterm/xterm/css/xterm.css"),
         ]);
         void cssMod;
-        console.log(`[Terminal] xterm loaded in ${(performance.now() - t0).toFixed(0)}ms`);
 
         // effect 已被清理（StrictMode 第二次 mount 之前），不再创建 xterm
-        if (cancelled || !containerRef.current) {
-          console.log("[Terminal] cancelled before open, skip");
-          return;
-        }
+        if (cancelled || !containerRef.current) return;
 
         const newTerm = new XTerm({
           theme: {
@@ -99,23 +93,19 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 
         // 先把缓冲回放，再开放实时写入
         const buffered = bufferRef.current;
-        if (buffered.length > 0) {
-          console.log(`[Terminal] flushing ${buffered.length} buffered ops`);
-          for (const op of buffered) {
-            if (op.kind === "write") {
-              newTerm.write(op.content);
-            } else {
-              newTerm.writeln(op.content);
-            }
+        for (const op of buffered) {
+          if (op.kind === "write") {
+            newTerm.write(op.content);
+          } else {
+            newTerm.writeln(op.content);
           }
-          bufferRef.current = [];
         }
+        bufferRef.current = [];
 
         term = newTerm;
         fit = newFit;
         termRef.current = newTerm;
         fitRef.current = newFit;
-        console.log("[Terminal] ready, id=", newTerm);
 
         ro = new ResizeObserver(onResize);
         ro.observe(containerRef.current!);
@@ -128,11 +118,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           fit: () => newFit.fit(),
         });
       })().catch((e) => {
-        console.error("[Terminal] failed to load xterm:", e);
+        console.error("Failed to load xterm:", e);
       });
 
       return () => {
-        console.log("[Terminal] cleanup, cancelled was", cancelled, "term?", !!term);
         cancelled = true;
         if (ro) {
           ro.disconnect();
@@ -140,9 +129,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         }
         window.removeEventListener("resize", onResize);
         if (term) {
-          // 这里 dispose 把 xterm 的 DOM 移掉
           term.dispose();
-          console.log("[Terminal] disposed xterm");
         }
         if (termRef.current === term) {
           termRef.current = null;
@@ -162,8 +149,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         if (term) {
           term.write(s);
         } else {
-          console.log(`[Terminal.write] xterm not ready, buffer len=${bufferRef.current.length} data_len=${s.length}`);
-          // XTerm 还没起来，先排队
           bufferRef.current.push({ kind: "write", content: s });
         }
       },
@@ -172,7 +157,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         if (term) {
           term.writeln(s);
         } else {
-          console.log(`[Terminal.writeln] xterm not ready, buffer len=${bufferRef.current.length} data_len=${s.length}`);
           bufferRef.current.push({ kind: "writeln", content: s });
         }
       },

@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -11,6 +12,7 @@ use crate::core::interpolation::{render, InterpContext};
 use crate::error::{AppError, AppResult};
 use crate::security::blacklist;
 use crate::state::AppState;
+use crate::storage::db::DbPool;
 use crate::storage::models::{CommandType, Param};
 
 /// 把 serde_json::Value (期望是 object) 转成 HashMap<String, serde_json::Value>
@@ -110,11 +112,27 @@ pub async fn run_command(
     state: State<'_, AppState>,
     input: RunCommandInput,
 ) -> AppResult<RunCommandResponse> {
-    let detail = fetch_command_detail(&state, &input.command_id).await?;
+    let response = run_command_inner(
+        app,
+        state.db.clone(),
+        state.execution_registry.clone(),
+        input,
+    )
+    .await?;
+    Ok(response)
+}
+
+/// 内部实现 — 也被 `replay_execution` 复用 (history.rs)
+pub async fn run_command_inner(
+    app: AppHandle,
+    db: Arc<DbPool>,
+    registry: Arc<crate::core::executor::ExecutionRegistry>,
+    input: RunCommandInput,
+) -> AppResult<RunCommandResponse> {
+    let detail = fetch_command_detail_inner(&db, &input.command_id).await?;
     let ctx = build_context(&input.params, &detail.params, &json_env_to_map(&detail.env))?;
     let rendered = render(&detail.template, &ctx)?;
 
-    // 安全检查
     if let Some(hit) = blacklist::check(&rendered) {
         if !input.override_safety {
             return Err(AppError::invalid(format!(
@@ -157,39 +175,14 @@ pub async fn run_command(
         command_id: detail.id.clone(),
         command_name: detail.name.clone(),
         command_type: detail.command_type.as_str().to_string(),
-        template: rendered.clone(),
+        template: rendered,
         working_dir: cwd,
         env: env_rendered,
         timeout_ms: detail.timeout_ms.map(|t| t as u64),
         input_params: Some(serde_json::to_value(&input.params)?),
     };
 
-    let db = state.db.clone();
-    let registry = state.execution_registry.clone();
-    let app_clone = app.clone();
-
-    tracing::info!(
-        "[run_command] called exec_id={} command_id={} command_name={} template={:?}",
-        execution_id,
-        detail.id,
-        detail.name,
-        rendered
-    );
-
-    // 直接 await 执行结果并回显给调用方。
-    // 进程内仍会通过 `run-event` 推送流式日志，前端可以实时显示。
-    let result = executor::execute(app_clone, db, registry, spec).await?;
-
-    tracing::info!(
-        "[run_command] returning exec_id={} status={} exit_code={:?} stdout_len={} stderr_len={} error={:?} preview={:?}",
-        execution_id,
-        result.status.as_str(),
-        result.exit_code,
-        result.stdout.len(),
-        result.stderr.len(),
-        result.error,
-        result.stdout.chars().take(120).collect::<String>()
-    );
+    let result = executor::execute(app, db, registry, spec).await?;
 
     Ok(RunCommandResponse {
         execution_id,
@@ -200,6 +193,23 @@ pub async fn run_command(
         stderr: result.stderr,
         error: result.error,
     })
+}
+
+/// 从历史里重放一条直接命令的入口（不走 State，避免 history.rs 借不到 State）
+pub async fn replay_direct_command(
+    app: AppHandle,
+    db: Arc<DbPool>,
+    registry: Arc<crate::core::executor::ExecutionRegistry>,
+    command_id: String,
+    params: std::collections::HashMap<String, serde_json::Value>,
+) -> AppResult<String> {
+    let input = RunCommandInput {
+        command_id,
+        params,
+        override_safety: true,
+    };
+    let resp = run_command_inner(app, db, registry, input).await?;
+    Ok(resp.execution_id)
 }
 
 #[tauri::command]
@@ -349,7 +359,14 @@ async fn fetch_command_detail(
     state: &State<'_, AppState>,
     command_id: &str,
 ) -> AppResult<CommandForRun> {
-    let conn = state.db.get()?;
+    fetch_command_detail_inner(&state.db, command_id).await
+}
+
+async fn fetch_command_detail_inner(
+    db: &Arc<DbPool>,
+    command_id: &str,
+) -> AppResult<CommandForRun> {
+    let conn = db.get()?;
 
     let (id, name, type_str, template, working_dir, env_str, timeout_ms): (
         String,
