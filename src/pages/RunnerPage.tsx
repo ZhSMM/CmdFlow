@@ -140,6 +140,9 @@ export function RunnerPage() {
     setError(null);
     setRunState("running");
     setShowConfirm(false);
+    // 主动清空终端，不依赖 execution_started 事件（事件在 await 期间被丢）
+    termRef.current?.clear();
+    termRef.current?.writeln(`\x1b[36m▶ 开始执行: ${detail.data?.name ?? commandId}\x1b[0m\r\n`);
     try {
       const res = await api.execution.run({
         command_id: commandId,
@@ -167,9 +170,6 @@ export function RunnerPage() {
       }
       const termOk = !!termRef.current;
       console.log("[doRun] termRef.current is", termOk ? "set" : "null");
-      termRef.current?.writeln(
-        `\r\n\x1b[${res.status === "success" ? "32" : "31"}m■ 执行结束: ${res.status} · ${formatDuration(res.duration_ms)}\x1b[0m`,
-      );
       if (res.stdout) {
         console.log(`[doRun] writing stdout len=${res.stdout.length} to terminal`);
         termRef.current?.write(res.stdout);
@@ -182,6 +182,9 @@ export function RunnerPage() {
       } else {
         console.log("[doRun] stderr is empty");
       }
+      termRef.current?.writeln(
+        `\r\n\x1b[${res.status === "success" ? "32" : "31"}m■ 执行结束: ${res.status} · ${formatDuration(res.duration_ms)}\x1b[0m`,
+      );
       qc.invalidateQueries({ queryKey: ["executions"] });
     } catch (e) {
       console.error("[doRun] exception", e);
