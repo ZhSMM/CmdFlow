@@ -10,6 +10,7 @@
 pub mod commands;
 pub mod core;
 pub mod error;
+pub mod js_runtime;
 pub mod nodes;
 pub mod security;
 pub mod state;
@@ -105,6 +106,9 @@ pub fn run() {
             commands::plugin::uninstall_plugin,
             commands::plugin::toggle_plugin,
             commands::plugin::execute_js_plugin,
+            // ===== YAML 导入导出 (Phase 8) =====
+            commands::yaml_io::export_workflow,
+            commands::yaml_io::import_workflow,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

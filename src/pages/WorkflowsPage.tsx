@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { api, type Workflow } from "@/lib/tauri";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Workflow as WorkflowIcon, Plus, Trash2, Play } from "lucide-react";
+import { Workflow as WorkflowIcon, Plus, Trash2, Play, FileUp } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
@@ -44,6 +46,29 @@ export function WorkflowsPage() {
     },
   });
 
+  const importYaml = useMutation({
+    mutationFn: (yaml: string) => api.yaml.importWorkflow(yaml),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      setEditingId(res.workflow_id);
+    },
+    onError: (e) => alert(`导入失败: ${(e as TauriError).message}`),
+  });
+
+  const onImport = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "YAML", extensions: ["yaml", "yml"] }],
+    });
+    if (typeof selected !== "string") return;
+    try {
+      const yaml = await readTextFile(selected);
+      importYaml.mutate(yaml);
+    } catch (e) {
+      alert(`读取失败: ${(e as Error).message}`);
+    }
+  };
+
   // 选中工作流进入编辑模式
   if (editingId) {
     return <WorkflowEditorWrapper id={editingId} onBack={() => setEditingId(null)} />;
@@ -59,6 +84,10 @@ export function WorkflowsPage() {
         <Button onClick={() => setShowNew(true)}>
           <Plus className="h-4 w-4" />
           新建工作流
+        </Button>
+        <Button variant="outline" onClick={onImport} disabled={importYaml.isPending}>
+          <FileUp className="h-4 w-4" />
+          {importYaml.isPending ? "导入中..." : "导入 YAML"}
         </Button>
       </div>
 

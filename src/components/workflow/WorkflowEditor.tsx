@@ -11,7 +11,7 @@ import {
   type EdgeChange,
   type Connection,
 } from "reactflow";
-import { Save, Play, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Save, Play, CheckCircle2, XCircle, AlertTriangle, Loader2, Download } from "lucide-react";
 import { api, type WorkflowEdge as WfEdge, TauriError } from "@/lib/tauri";
 import { Button } from "@/components/ui/Button";
 import { NodePanel } from "./NodePanel";
@@ -240,6 +240,19 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
       executionId ? api.workflow.cancelExecution(executionId) : Promise.resolve(false),
   });
 
+  const exportYaml = useMutation({
+    mutationFn: () => api.yaml.exportWorkflow(workflowId),
+    onSuccess: (yaml) => {
+      const blob = new Blob([yaml], { type: "text/yaml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${detail.data?.name || "workflow"}.yaml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  });
+
   // 监听执行事件
   useEffect(() => {
     if (!executionId) return;
@@ -301,6 +314,16 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
               <Save className="h-3 w-3" />
             )}
             保存
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => exportYaml.mutate()}
+            disabled={exportYaml.isPending}
+            title="导出为 YAML 文件"
+          >
+            <Download className="h-3 w-3" />
+            导出
           </Button>
           {runState === "running" ? (
             <Button size="sm" variant="destructive" onClick={() => cancel.mutate()}>

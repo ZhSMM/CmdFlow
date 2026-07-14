@@ -400,6 +400,13 @@ export interface PluginInfo {
   size_bytes: number;
 }
 
+// ==================== YAML (Phase 8) ====================
+
+export interface YamlImportResult {
+  workflow_id: string;
+  name: string;
+}
+
 // ==================== API ====================
 
 export const api = {
@@ -484,6 +491,10 @@ export const api = {
       call<void>("toggle_plugin", { id, enabled }),
     execute: (plugin_id: string, func: string, args: unknown) =>
       call<unknown>("execute_js_plugin", { pluginId: plugin_id, function: func, args }),
+  },
+  yaml: {
+    exportWorkflow: (id: string) => call<string>("export_workflow", { id }),
+    importWorkflow: (yaml: string) => call<YamlImportResult>("import_workflow", { yaml }),
   },
 };
 

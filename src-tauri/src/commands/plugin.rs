@@ -178,20 +178,76 @@ pub fn register_palette_shortcut(app: &AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-/// Phase 7 简单示例: 调用 JS 插件 (内嵌的 hello-world 例子)
+/// 调用 JS 插件 (Phase 8 真用 Boa engine 跑)
 #[tauri::command]
 pub async fn execute_js_plugin(
+    app: AppHandle,
     _state: State<'_, AppState>,
     plugin_id: String,
     function: String,
     args: serde_json::Value,
 ) -> AppResult<serde_json::Value> {
-    // Phase 7 placeholder: 真正实现需要 QuickJS 嵌入
-    // 这里先返回模拟结果
-    tracing::info!("执行 JS 插件: {}::{} (args: {})", plugin_id, function, args);
+    use std::collections::HashMap;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    // 读插件入口
+    let dir = plugins_dir(&app)?;
+    let plugin_dir = dir.join(&plugin_id);
+    let manifest_path = plugin_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Err(AppError::not_found(format!("plugin: {plugin_id}")));
+    }
+    let manifest_str = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| AppError::other(format!("读 manifest 失败: {e}")))?;
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| AppError::other(format!("manifest 解析失败: {e}")))?;
+    if manifest.format != "js" {
+        return Err(AppError::other(format!("不支持的插件格式: {}", manifest.format)));
+    }
+
+    let entry_path = plugin_dir.join(&manifest.entry);
+    let source = std::fs::read_to_string(&entry_path)
+        .map_err(|e| AppError::other(format!("读插件入口失败: {e}")))?;
+
+    // 转 args: serde_json::Value -> HashMap
+    let params: HashMap<String, serde_json::Value> = match args {
+        serde_json::Value::Object(m) => m.into_iter().collect(),
+        _ => HashMap::new(),
+    };
+
+    // 5s 超时
+    let source_clone = source.clone();
+    let params_clone = params.clone();
+    let exec = tokio::task::spawn_blocking(move || {
+        crate::js_runtime::execute(&source_clone, params_clone)
+    });
+
+    let res = match timeout(Duration::from_secs(5), exec).await {
+        Ok(Ok(r)) => r?,
+        Ok(Err(join_err)) => {
+            return Err(AppError::other(format!("插件执行 join 失败: {join_err}")));
+        }
+        Err(_) => {
+            return Err(AppError::other(format!(
+                "插件 {plugin_id} 执行超时 (5s)"
+            )));
+        }
+    };
+
+    tracing::info!(
+        "插件 {plugin_id}::{function} 执行完毕, {} 条日志",
+        res.logs.len()
+    );
+    for log in &res.logs {
+        tracing::debug!("  [plugin log] {log}");
+    }
+
+    // 把日志包进 result (兼容老接口)
     Ok(serde_json::json!({
         "plugin": plugin_id,
         "function": function,
-        "result": "ok (mock - JS 引擎待 Phase 8 集成 QuickJS)"
+        "result": res.result,
+        "logs": res.logs,
     }))
 }
