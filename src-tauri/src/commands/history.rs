@@ -274,3 +274,189 @@ pub async fn replay_execution(
 
     Ok(new_execution_id)
 }
+
+// ==================== Phase 6: 增强 ====================
+
+#[derive(Serialize)]
+pub struct HistoryStats {
+    pub total: i64,
+    pub success: i64,
+    pub failed: i64,
+    pub running: i64,
+    pub avg_duration_ms: i64,
+    pub last_24h_count: i64,
+    pub by_status: Vec<StatusBucket>,
+}
+
+#[derive(Serialize)]
+pub struct StatusBucket {
+    pub status: String,
+    pub count: i64,
+}
+
+#[tauri::command]
+pub async fn get_history_stats(state: State<'_, AppState>) -> AppResult<HistoryStats> {
+    let conn = state.db.get()?;
+
+    let (total, success, failed, running, avg_duration, last_24h): (i64, i64, i64, i64, i64, i64) = conn
+        .query_row(
+            "SELECT
+                COUNT(*),
+                COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0),
+                COALESCE(AVG(duration_ms), 0),
+                COALESCE(SUM(CASE WHEN started_at > ?1 THEN 1 ELSE 0 END), 0)
+             FROM executions",
+            rusqlite::params![chrono::Utc::now().timestamp() - 86400],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+        )?;
+
+    let mut stmt = conn.prepare(
+        "SELECT status, COUNT(*) as c FROM executions GROUP BY status ORDER BY c DESC",
+    )?;
+    let by_status: Vec<StatusBucket> = stmt
+        .query_map([], |r| Ok(StatusBucket { status: r.get(0)?, count: r.get(1)? }))?
+        .filter_map(Result::ok)
+        .collect();
+
+    Ok(HistoryStats {
+        total,
+        success,
+        failed,
+        running,
+        avg_duration_ms: avg_duration,
+        last_24h_count: last_24h,
+        by_status,
+    })
+}
+
+/// 删除单条历史 (级联删除 node_runs 和 run_logs)
+#[tauri::command]
+pub async fn delete_history(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    let conn = state.db.get()?;
+    // FK 关系: node_runs.execution_id → executions.id; run_logs.node_run_id → node_runs.id
+    // 先删 run_logs 再 node_runs 再 executions
+    conn.execute(
+        "DELETE FROM run_logs WHERE node_run_id IN (SELECT id FROM node_runs WHERE execution_id = ?1)",
+        [&id],
+    )?;
+    conn.execute("DELETE FROM node_runs WHERE execution_id = ?1", [&id])?;
+    conn.execute("DELETE FROM executions WHERE id = ?1", [&id])?;
+    Ok(())
+}
+
+#[derive(serde::Deserialize)]
+pub struct ClearHistoryInput {
+    /// 只清某种状态
+    pub status: Option<String>,
+    /// 只清某个工作流
+    pub workflow_id: Option<String>,
+    /// 清比这早的 (unix ts 秒)
+    pub before_ts: Option<i64>,
+    /// 真正删除 (false = 返回会被删除的数量)
+    pub dry_run: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub struct ClearHistoryResult {
+    pub deleted: usize,
+}
+
+#[tauri::command]
+pub async fn clear_history(
+    state: State<'_, AppState>,
+    input: ClearHistoryInput,
+) -> AppResult<ClearHistoryResult> {
+    let conn = state.db.get()?;
+
+    // 拼条件
+    let mut where_clause = String::from(" WHERE 1=1");
+    let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    if let Some(s) = &input.status {
+        where_clause.push_str(" AND status = ?");
+        args.push(Box::new(s.clone()));
+    }
+    if let Some(wid) = &input.workflow_id {
+        where_clause.push_str(" AND workflow_id = ?");
+        args.push(Box::new(wid.clone()));
+    }
+    if let Some(ts) = input.before_ts {
+        where_clause.push_str(" AND COALESCE(started_at, 0) < ?");
+        args.push(Box::new(ts));
+    }
+
+    // 先 count
+    let count_sql = format!("SELECT COUNT(*) FROM executions{}", where_clause);
+    let arg_refs: Vec<&dyn rusqlite::ToSql> = args.iter().map(|a| a.as_ref()).collect();
+    let count: i64 = conn.query_row(&count_sql, &*arg_refs, |r| r.get(0))?;
+    let count = count as usize;
+
+    if !input.dry_run.unwrap_or(false) && count > 0 {
+        // 先删 run_logs
+        let log_sql = format!(
+            "DELETE FROM run_logs WHERE node_run_id IN (SELECT id FROM node_runs WHERE execution_id IN (SELECT id FROM executions{}))",
+            where_clause
+        );
+        conn.execute(&log_sql, &*arg_refs)?;
+
+        // 再删 node_runs
+        let nr_sql = format!(
+            "DELETE FROM node_runs WHERE execution_id IN (SELECT id FROM executions{})",
+            where_clause
+        );
+        conn.execute(&nr_sql, &*arg_refs)?;
+
+        // 最后删 executions
+        let del_sql = format!("DELETE FROM executions{}", where_clause);
+        conn.execute(&del_sql, &*arg_refs)?;
+    }
+
+    Ok(ClearHistoryResult { deleted: count })
+}
+
+/// 按名称/ID 模糊搜索历史
+#[tauri::command]
+pub async fn search_history(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<i64>,
+) -> AppResult<Vec<HistorySummary>> {
+    let conn = state.db.get()?;
+    let limit = limit.unwrap_or(50);
+    let pat = format!("%{}%", query);
+
+    let mut stmt = conn.prepare(
+        "SELECT e.id, e.workflow_id,
+                COALESCE(c.name, w.name, '?') as workflow_name,
+                e.trigger, e.status,
+                e.started_at, e.finished_at, e.duration_ms, e.error
+         FROM executions e
+         LEFT JOIN workflows w ON w.id = e.workflow_id
+         LEFT JOIN commands  c ON c.id = e.workflow_id
+         WHERE e.id LIKE ?1
+            OR e.workflow_id LIKE ?1
+            OR COALESCE(c.name, w.name, '') LIKE ?1
+            OR e.error LIKE ?1
+         ORDER BY COALESCE(e.started_at, 0) DESC
+         LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![pat, limit], |r| {
+        Ok(HistorySummary {
+            id: r.get(0)?,
+            workflow_id: r.get(1)?,
+            workflow_name: r.get(2)?,
+            trigger: r.get(3)?,
+            status: r.get(4)?,
+            started_at: r.get(5)?,
+            finished_at: r.get(6)?,
+            duration_ms: r.get(7)?,
+            error: r.get(8)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}

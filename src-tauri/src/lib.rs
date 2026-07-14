@@ -78,6 +78,10 @@ pub fn run() {
             commands::history::list_history,
             commands::history::get_history_detail,
             commands::history::replay_execution,
+            commands::history::get_history_stats,
+            commands::history::delete_history,
+            commands::history::clear_history,
+            commands::history::search_history,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

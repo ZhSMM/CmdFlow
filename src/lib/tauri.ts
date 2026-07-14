@@ -307,6 +307,27 @@ export interface HistoryDetail extends HistorySummary {
   node_runs: NodeRunInfo[];
 }
 
+export interface HistoryStats {
+  total: number;
+  success: number;
+  failed: number;
+  running: number;
+  avg_duration_ms: number;
+  last_24h_count: number;
+  by_status: Array<{ status: string; count: number }>;
+}
+
+export interface ClearHistoryInput {
+  status?: string;
+  workflow_id?: string;
+  before_ts?: number;
+  dry_run?: boolean;
+}
+
+export interface ClearHistoryResult {
+  deleted: number;
+}
+
 // ==================== API ====================
 
 export const api = {
@@ -359,6 +380,12 @@ export const api = {
       call<HistorySummary[]>("list_history", params),
     get: (id: string) => call<HistoryDetail>("get_history_detail", { id }),
     replay: (id: string) => call<string>("replay_execution", { executionId: id }),
+    search: (query: string, limit?: number) =>
+      call<HistorySummary[]>("search_history", { query, limit }),
+    stats: () => call<HistoryStats>("get_history_stats"),
+    remove: (id: string) => call<void>("delete_history", { id }),
+    clear: (input: ClearHistoryInput) =>
+      call<ClearHistoryResult>("clear_history", { input }),
   },
 };
 
