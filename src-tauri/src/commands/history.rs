@@ -39,6 +39,7 @@ pub struct HistoryDetail {
     #[serde(flatten)]
     pub summary: HistorySummary,
     pub input_params: Option<serde_json::Value>,
+    pub rendered_template: Option<String>,
     pub node_runs: Vec<NodeRunInfo>,
 }
 
@@ -130,11 +131,13 @@ pub async fn get_history_detail(
         other => AppError::Database(other),
     })?;
 
-    let (input_params_str,): (Option<String>,) = conn.query_row(
-        "SELECT input_params FROM executions WHERE id = ?1",
-        [&id],
-        |r| Ok((r.get::<_, Option<String>>(0)?,)),
-    ).unwrap_or((None,));
+    let (input_params_str, rendered_template): (Option<String>, Option<String>) = conn
+        .query_row(
+            "SELECT input_params, rendered_template FROM executions WHERE id = ?1",
+            [&id],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)),
+        )
+        .unwrap_or((None, None));
     let input_params = input_params_str.and_then(|s| serde_json::from_str(&s).ok());
 
     let mut nstmt = conn.prepare(
@@ -165,6 +168,7 @@ pub async fn get_history_detail(
     Ok(HistoryDetail {
         summary,
         input_params,
+        rendered_template,
         node_runs,
     })
 }

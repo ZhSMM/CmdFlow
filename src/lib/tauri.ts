@@ -292,6 +292,7 @@ export interface NodeRunInfo {
 
 export interface HistoryDetail extends HistorySummary {
   input_params: unknown;
+  rendered_template: string | null;
   node_runs: NodeRunInfo[];
 }
 

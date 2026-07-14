@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   History as HistoryIcon, RefreshCw, CheckCircle2, XCircle, Loader2,
-  Calendar, Clock, AlertCircle, Copy, Terminal as TerminalIcon,
+  Calendar, Clock, AlertCircle, Terminal as TerminalIcon, Play,
 } from "lucide-react";
 import { api, type HistorySummary, type HistoryDetail, TauriError } from "@/lib/tauri";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -12,6 +12,16 @@ import { Badge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDate, formatDuration, cn } from "@/lib/utils";
+
+/** 把一条历史转换成 Runner 页面 URL（带 cmd + params 预填） */
+function buildRunnerUrl(h: Pick<HistorySummary, "workflow_id"> & { input_params?: unknown }) {
+  const params = h.input_params ?? null;
+  return params
+    ? `/runner?cmd=${encodeURIComponent(h.workflow_id)}&params=${encodeURIComponent(
+        JSON.stringify(params),
+      )}`
+    : `/runner?cmd=${encodeURIComponent(h.workflow_id)}`;
+}
 
 export function HistoryPage() {
   const qc = useQueryClient();
@@ -37,12 +47,18 @@ export function HistoryPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["history"] }),
   });
 
+  const goRunner = (h: HistorySummary) => {
+    navigate(buildRunnerUrl(h as HistorySummary & { input_params?: unknown }));
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-6 py-3">
         <div>
           <h1 className="text-lg font-semibold">历史</h1>
-          <p className="text-xs text-muted-foreground">所有执行的记录与日志，可重放或载入参数</p>
+          <p className="text-xs text-muted-foreground">
+            所有执行的记录与日志，点「再次执行」直接跳到 Runner 预填参数
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <FilterChip label="全部" active={!filter.status} onClick={() => setFilter({})} />
@@ -86,12 +102,12 @@ export function HistoryPage() {
                 className="cursor-pointer hover:bg-accent/30"
                 onClick={() => setViewingId(h.id)}
               >
-                <CardContent className="flex items-center justify-between p-3">
-                  <div className="flex items-center gap-3">
+                <CardContent className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <StatusIcon status={h.status} />
-                    <div>
-                      <div className="text-sm font-medium">{h.workflow_name}</div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{h.workflow_name}</div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {formatDate(h.started_at)}
@@ -105,29 +121,43 @@ export function HistoryPage() {
                         </Badge>
                       </div>
                       {h.error && (
-                        <div className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                          <AlertCircle className="h-3 w-3" />
-                          {h.error}
+                        <div className="mt-1 flex items-center gap-1 truncate text-xs text-destructive">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{h.error}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      replay.mutate(h.id);
-                    }}
-                    disabled={replay.isPending}
-                  >
-                    {replay.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                    重放
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        replay.mutate(h.id);
+                      }}
+                      disabled={replay.isPending}
+                      title="原地重放（用同参数立即重新跑一次）"
+                    >
+                      {replay.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      重放
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goRunner(h);
+                      }}
+                      title="跳到执行页，预填该次参数（可改后再跑）"
+                    >
+                      <Play className="h-3 w-3" />
+                      再次执行
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -146,6 +176,19 @@ export function HistoryPage() {
         }}
         title="执行详情"
         className="max-w-4xl"
+        footer={
+          detail.data ? (
+            <Button
+              onClick={() => {
+                goRunner(detail.data as HistorySummary & { input_params?: unknown });
+                setViewingId(null);
+              }}
+            >
+              <Play className="h-4 w-4" />
+              再次执行（预填参数）
+            </Button>
+          ) : null
+        }
       >
         {detail.isLoading && <div className="text-sm text-muted-foreground">加载中...</div>}
         {detail.error && (
@@ -156,16 +199,6 @@ export function HistoryPage() {
             detail={detail.data}
             activeNodeRun={activeNodeRun}
             onSelectNodeRun={setActiveNodeRun}
-            onLoadToRunner={() => {
-              if (!detail.data) return;
-              const id = detail.data.workflow_id;
-              const params = detail.data.input_params ?? null;
-              const url = params
-                ? `/runner?cmd=${encodeURIComponent(id)}&params=${encodeURIComponent(JSON.stringify(params))}`
-                : `/runner?cmd=${encodeURIComponent(id)}`;
-              setViewingId(null);
-              navigate(url);
-            }}
           />
         )}
       </Dialog>
@@ -201,12 +234,10 @@ function HistoryDetailView({
   detail,
   activeNodeRun,
   onSelectNodeRun,
-  onLoadToRunner,
 }: {
   detail: HistoryDetail;
   activeNodeRun: string | null;
   onSelectNodeRun: (id: string | null) => void;
-  onLoadToRunner: () => void;
 }) {
   const active = detail.node_runs.find((n) => n.id === activeNodeRun) || detail.node_runs[0];
   const hasInputParams = Boolean(
@@ -217,25 +248,17 @@ function HistoryDetailView({
 
   return (
     <div className="space-y-3 text-xs">
-      {/* 顶部：摘要 + 操作 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 p-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusIcon status={detail.status} />
-          <span className="font-medium">{detail.workflow_name}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{formatDate(detail.started_at)}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{formatDuration(detail.duration_ms)}</span>
-          <Badge variant="outline" className="text-[10px]">
-            {detail.trigger === "manual" ? "手动" : detail.trigger === "schedule" ? "调度" : detail.trigger}
-          </Badge>
-        </div>
-        {hasInputParams && (
-          <Button size="sm" variant="outline" onClick={onLoadToRunner}>
-            <Copy className="h-3 w-3" />
-            载入到执行页
-          </Button>
-        )}
+      {/* 顶部：摘要 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2">
+        <StatusIcon status={detail.status} />
+        <span className="font-medium">{detail.workflow_name}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground">{formatDate(detail.started_at)}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground">{formatDuration(detail.duration_ms)}</span>
+        <Badge variant="outline" className="text-[10px]">
+          {detail.trigger === "manual" ? "手动" : detail.trigger === "schedule" ? "调度" : detail.trigger}
+        </Badge>
       </div>
 
       {detail.error ? (
@@ -245,11 +268,24 @@ function HistoryDetailView({
         </div>
       ) : null}
 
+      {/* 渲染后的最终命令（调试关键） */}
+      {detail.rendered_template ? (
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 font-medium">
+            <TerminalIcon className="h-3 w-3" />
+            实际执行的命令
+          </div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-slate-950 p-2 font-mono text-[11px] text-green-300">
+            {detail.rendered_template}
+          </pre>
+        </div>
+      ) : null}
+
       {/* 命令参数 */}
       {hasInputParams ? (
         <div>
-          <div className="mb-1 font-medium">命令参数</div>
-          <pre className="max-h-40 overflow-auto rounded bg-slate-900 p-2 font-mono text-[11px] text-slate-100">
+          <div className="mb-1 font-medium">命令参数 (input_params)</div>
+          <pre className="max-h-32 overflow-auto rounded bg-slate-900 p-2 font-mono text-[11px] text-slate-100">
             {JSON.stringify(detail.input_params, null, 2) as string}
           </pre>
         </div>

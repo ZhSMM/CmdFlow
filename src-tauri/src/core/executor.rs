@@ -331,13 +331,14 @@ async fn insert_execution(
         .map(serde_json::to_string)
         .transpose()?;
     conn.execute(
-        "INSERT INTO executions (id, workflow_id, trigger, status, started_at, input_params)
-         VALUES (?1, ?2, 'manual', 'running', ?3, ?4)",
+        "INSERT INTO executions (id, workflow_id, trigger, status, started_at, input_params, rendered_template)
+         VALUES (?1, ?2, 'manual', 'running', ?3, ?4, ?5)",
         params![
             spec.execution_id,
             spec.command_id, // Phase 1 复用 workflow_id 字段存 command_id
             started_at,
             input_params,
+            spec.template,  // 渲染后最终传给 shell 的命令，方便历史回查
         ],
     )?;
     Ok(())
