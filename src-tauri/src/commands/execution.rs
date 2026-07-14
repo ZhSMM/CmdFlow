@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
-use tokio::task;
 
 use crate::core::executor::{self, ExecutionSpec};
 use crate::core::interpolation::{render, InterpContext};
@@ -35,6 +34,12 @@ pub struct RunCommandInput {
 #[derive(Serialize)]
 pub struct RunCommandResponse {
     pub execution_id: String,
+    pub status: String,
+    pub exit_code: Option<i32>,
+    pub duration_ms: u64,
+    pub stdout: String,
+    pub stderr: String,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -163,17 +168,19 @@ pub async fn run_command(
     let registry = state.execution_registry.clone();
     let app_clone = app.clone();
 
-    // 异步执行，不阻塞 invoke 返回
-    task::spawn(async move {
-        match executor::execute(app_clone, db, registry, spec).await {
-            Ok(_) => {}
-            Err(e) => {
-                tracing::error!("执行失败: {e}");
-            }
-        }
-    });
+    // 直接 await 执行结果并回显给调用方。
+    // 进程内仍会通过 `run-event` 推送流式日志，前端可以实时显示。
+    let result = executor::execute(app_clone, db, registry, spec).await?;
 
-    Ok(RunCommandResponse { execution_id })
+    Ok(RunCommandResponse {
+        execution_id,
+        status: result.status.as_str().to_string(),
+        exit_code: result.exit_code,
+        duration_ms: result.duration_ms,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        error: result.error,
+    })
 }
 
 #[tauri::command]

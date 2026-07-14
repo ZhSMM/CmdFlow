@@ -143,6 +143,23 @@ export function RunnerPage() {
         override_safety: override,
       });
       setExecutionId(res.execution_id);
+      // 后端现在同步 await 执行完成并回显完整结果，
+      // 这里把退出码、状态、错误直接写回 UI，避免依赖事件时序。
+      setExitCode(res.exit_code);
+      setRunState(res.status as RunState);
+      if (res.error) {
+        setError(res.error);
+      }
+      termRef.current?.writeln(
+        `\r\n\x1b[${res.status === "success" ? "32" : "31"}m■ 执行结束: ${res.status} · ${formatDuration(res.duration_ms)}\x1b[0m`,
+      );
+      if (res.stdout) {
+        termRef.current?.write(res.stdout);
+      }
+      if (res.stderr) {
+        termRef.current?.write(`\x1b[31m${res.stderr}\x1b[0m`);
+      }
+      qc.invalidateQueries({ queryKey: ["executions"] });
     } catch (e) {
       setError((e as TauriError).message);
       setRunState("failed");

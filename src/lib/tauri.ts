@@ -154,6 +154,12 @@ export interface CommandPreview {
 
 export interface RunCommandResponse {
   execution_id: string;
+  status: NodeStatus;
+  exit_code: number | null;
+  duration_ms: number;
+  stdout: string;
+  stderr: string;
+  error: string | null;
 }
 
 export interface ExecutionSummary {

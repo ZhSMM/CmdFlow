@@ -289,8 +289,13 @@ async fn trigger_one(
 }
 
 /// 启动调度器（在 AppState::init 后调）
+///
+/// 注意：Tauri 的 setup 回调是同步执行的，调用时主线程还没有进入
+/// tokio runtime 上下文。直接 `tokio::spawn` 会 panic
+/// （"there is no reactor running"）。改用 `tauri::async_runtime::spawn`，
+/// 它会复用 Tauri 自带的 tokio 运行时，在任何位置都能正常 spawn。
 pub fn start(app: AppHandle, db: Arc<DbPool>) {
-    tokio::spawn(run_scheduler_loop(app, db));
+    tauri::async_runtime::spawn(run_scheduler_loop(app, db));
     tracing::info!("调度器已启动");
 }
 
