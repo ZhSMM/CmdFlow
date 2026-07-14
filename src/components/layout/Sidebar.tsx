@@ -67,8 +67,10 @@ export function Sidebar() {
       <div className="border-b p-2">
         <button
           onClick={() => {
-            // 通过 DOM 自定义事件通知 MainLayout 弹启动器
-            window.dispatchEvent(new CustomEvent("open-palette"));
+            // 打开独立启动器窗口 (Phase 9.4)
+            api.window.showPalette().catch((e) => {
+              console.error("打开启动器窗口失败:", e);
+            });
           }}
           className="flex w-full items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/30"
         >

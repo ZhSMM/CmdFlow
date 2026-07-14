@@ -162,16 +162,21 @@ pub async fn toggle_plugin(app: AppHandle, id: String, enabled: bool) -> AppResu
     Ok(())
 }
 
-/// 注册全局快捷键 Cmd+Shift+Space 唤起启动器
+/// 注册全局快捷键 Cmd+Shift+Space 唤起启动器独立窗口 (Phase 9.4)
 pub fn register_palette_shortcut(app: &AppHandle) -> AppResult<()> {
-    use tauri::Emitter;
+    use tauri::Manager;
     let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
     let app_clone = app.clone();
     app.global_shortcut()
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                // 推一个事件给前端,前端决定是否弹启动器
-                let _ = app_clone.emit("palette-toggle", ());
+                // 直接调命令创建/聚焦独立窗口
+                let app_handle = app_clone.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = crate::commands::window::show_palette_window(app_handle).await {
+                        tracing::warn!("唤起启动器窗口失败: {e}");
+                    }
+                });
             }
         })
         .map_err(|e| AppError::other(format!("注册全局快捷键失败: {e}")))?;

@@ -19,6 +19,7 @@ pub mod wasm_runtime;
 
 use tauri::Manager;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 /// 启动 Tauri 应用
 pub fn run() {
@@ -116,6 +117,9 @@ pub fn run() {
             commands::templates::list_templates,
             commands::templates::get_template,
             commands::templates::import_template,
+            // ===== 多窗口 (Phase 9.4) =====
+            commands::window::show_palette_window,
+            commands::window::hide_palette_window,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

@@ -7,5 +7,6 @@ pub mod plugin;
 pub mod schedule;
 pub mod system;
 pub mod templates;
+pub mod window;
 pub mod workflow;
 pub mod yaml_io;

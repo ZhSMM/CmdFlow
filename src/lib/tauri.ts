@@ -506,6 +506,10 @@ export const api = {
     import: (id: string, new_name?: string) =>
       call<YamlImportResult>("import_template", { id, newName: new_name }),
   },
+  window: {
+    showPalette: () => call<void>("show_palette_window"),
+    hidePalette: () => call<void>("hide_palette_window"),
+  },
 };
 
 // ==================== 模板 (Phase 9.2) ====================

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Play, Star, Hash, FolderTree } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Search, Play, Star, Hash, FolderTree, X } from "lucide-react";
 import { api, type Command, type Favorite } from "@/lib/tauri";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -15,15 +16,27 @@ interface PaletteItem {
   score: number;
 }
 
-export function CommandPalette() {
+interface CommandPaletteProps {
+  /**
+   * 渲染模式:
+   * - popup:  在父页面盖一层黑色遮罩,主窗口内弹窗
+   * - standalone: 不带遮罩,用于独立窗口 (Tauri palette window)
+   */
+  mode?: "popup" | "standalone";
+  /** 关闭时回调 (standalone 模式下一般是 getCurrentWindow().close()) */
+  onClose?: () => void;
+}
+
+export function CommandPalette({ mode = "popup", onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(mode === "standalone");
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 监听全局快捷键触发 + DOM 事件
+  // popup 模式: 监听全局快捷键 + DOM 事件
   useEffect(() => {
+    if (mode === "standalone") return;
     const unTauri = listen("palette-toggle", () => {
       setOpen((o) => !o);
     });
@@ -33,7 +46,7 @@ export function CommandPalette() {
       unTauri.then((u) => u());
       window.removeEventListener("open-palette", onDom);
     };
-  }, []);
+  }, [mode]);
 
   // 打开时聚焦输入框
   useEffect(() => {
@@ -44,25 +57,40 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  // 关闭自身 (standalone 模式)
+  const closeSelf = async () => {
+    if (onClose) {
+      onClose();
+    } else if (mode === "standalone") {
+      try {
+        await getCurrentWindow().close();
+      } catch (e) {
+        console.error("close palette window failed:", e);
+      }
+    } else {
+      setOpen(false);
+    }
+  };
+
   const commands = useQuery({
-    queryKey: ["commands-palette"],
+    queryKey: ["commands-palette", mode],
     queryFn: () => api.library.list(),
-    enabled: open,
+    enabled: open || mode === "standalone",
   });
   const favorites = useQuery({
-    queryKey: ["favorites-palette"],
+    queryKey: ["favorites-palette", mode],
     queryFn: () => api.favorite.list(),
-    enabled: open,
+    enabled: open || mode === "standalone",
   });
   const workflows = useQuery({
-    queryKey: ["workflows-palette"],
+    queryKey: ["workflows-palette", mode],
     queryFn: () => api.workflow.list(),
-    enabled: open,
+    enabled: open || mode === "standalone",
   });
 
   // 构造候选项
   const items: PaletteItem[] = useMemo(() => {
-    if (!open) return [];
+    if (!open && mode !== "standalone") return [];
     const result: PaletteItem[] = [];
 
     // 收藏优先
@@ -106,22 +134,45 @@ export function CommandPalette() {
       .filter((it) => query.length === 0 || it.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
-  }, [open, commands.data, favorites.data, workflows.data, query]);
+  }, [open, mode, commands.data, favorites.data, workflows.data, query]);
 
   // 选中执行
   const execute = (item: PaletteItem) => {
-    setOpen(false);
-    if (item.kind === "command" || item.kind === "favorite") {
-      navigate(`/runner?cmd=${encodeURIComponent(item.id)}`);
-    } else if (item.kind === "workflow") {
-      // 工作流直接进编辑/执行
-      navigate(`/workflows/${item.id}`);
+    if (mode === "standalone") {
+      // 独立窗口模式: 给主窗口发事件 + 关闭自己
+      // 1) 计算目标 URL
+      let target = "/library";
+      if (item.kind === "command" || item.kind === "favorite") {
+        target = `/runner?cmd=${encodeURIComponent(item.id)}`;
+      } else if (item.kind === "workflow") {
+        target = `/workflows/${item.id}`;
+      }
+      // 2) 通过 Tauri 事件通知主窗口 + 自定义事件,主窗口监听 navigate
+      import("@tauri-apps/api/event").then(({ emit }) => {
+        emit("palette-navigate", { target });
+        setTimeout(async () => {
+          try {
+            await getCurrentWindow().close();
+          } catch (e) {
+            console.error(e);
+          }
+        }, 80);
+      });
+    } else {
+      // popup 模式: 直接 navigate
+      setOpen(false);
+      if (item.kind === "command" || item.kind === "favorite") {
+        navigate(`/runner?cmd=${encodeURIComponent(item.id)}`);
+      } else if (item.kind === "workflow") {
+        navigate(`/workflows/${item.id}`);
+      }
     }
   };
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
-      setOpen(false);
+      e.preventDefault();
+      closeSelf();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(items.length - 1, i + 1));
@@ -134,21 +185,35 @@ export function CommandPalette() {
       if (item) execute(item);
     } else if (e.key === " " && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      setOpen(false);
+      closeSelf();
     }
   };
 
-  if (!open) return null;
+  // popup 模式 + 关闭 → 不渲染
+  if (mode === "popup" && !open) return null;
+
+  const containerClass =
+    mode === "standalone"
+      ? "flex h-screen w-screen flex-col bg-card text-card-foreground"
+      : "fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24";
+
+  const innerClass =
+    mode === "standalone"
+      ? "flex h-full w-full flex-col"
+      : "w-full max-w-2xl overflow-hidden rounded-lg border bg-card shadow-2xl";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24"
-      onClick={() => setOpen(false)}
+      className={containerClass}
+      onClick={(e) => {
+        // standalone: 整个窗口就是 palette,点击空白不关;只能 Esc 关
+        // popup: 点击背景关
+        if (mode === "popup") {
+          if (e.target === e.currentTarget) setOpen(false);
+        }
+      }}
     >
-      <div
-        className="w-full max-w-2xl overflow-hidden rounded-lg border bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className={innerClass}>
         <div className="flex items-center gap-2 border-b px-4 py-3">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
@@ -159,14 +224,24 @@ export function CommandPalette() {
               setActiveIdx(0);
             }}
             onKeyDown={onKey}
-            placeholder="搜命令/工作流 (Cmd+Shift+Space)"
+            placeholder="搜命令/工作流..."
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
-          <kbd className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            ESC
-          </kbd>
+          {mode === "standalone" ? (
+            <button
+              onClick={closeSelf}
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="关闭 (Esc)"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <kbd className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              ESC
+            </kbd>
+          )}
         </div>
-        <div className="max-h-96 overflow-y-auto p-1">
+        <div className="flex-1 overflow-y-auto p-1">
           {items.length === 0 && (
             <div className="p-8 text-center text-sm text-muted-foreground">
               {query ? "没找到匹配项" : "输入关键词搜索..."}
