@@ -6,6 +6,7 @@ import { RunnerPage } from "@/pages/RunnerPage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { SchedulesPage } from "@/pages/SchedulesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { PluginsPage } from "@/pages/PluginsPage";
 
 export const router = createHashRouter([
   {
@@ -22,6 +23,7 @@ export const router = createHashRouter([
       { path: "history", element: <HistoryPage /> },
       { path: "schedules", element: <SchedulesPage /> },
       { path: "settings", element: <SettingsPage /> },
+      { path: "plugins", element: <PluginsPage /> },
     ],
   },
 ]);

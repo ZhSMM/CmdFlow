@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, TauriError, type Command } from "@/lib/tauri";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Library as LibraryIcon, Plus, Pencil, Trash2, Play } from "lucide-react";
+import { Library as LibraryIcon, Plus, Pencil, Trash2, Play, Star } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { CommandEditor } from "@/components/forms/CommandEditor";
 import { Dialog } from "@/components/ui/Dialog";
@@ -30,6 +30,14 @@ export function LibraryPage() {
       qc.invalidateQueries({ queryKey: ["commands"] });
       setDeletingId(null);
     },
+  });
+
+  const favs = useQuery({ queryKey: ["favorites"], queryFn: () => api.favorite.list() });
+  const favSet = new Set((favs.data ?? []).map((f) => f.command_id));
+  const toggleFav = useMutation({
+    mutationFn: (id: string) =>
+      favSet.has(id) ? api.favorite.remove(id) : api.favorite.add(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
   });
 
   return (
@@ -125,6 +133,24 @@ export function LibraryPage() {
                   )}
                 </CardContent>
                 <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFav.mutate(cmd.id);
+                    }}
+                    className={
+                      favSet.has(cmd.id)
+                        ? "rounded p-1 text-amber-500"
+                        : "rounded p-1 text-muted-foreground hover:bg-accent hover:text-amber-500"
+                    }
+                    title={favSet.has(cmd.id) ? "取消收藏" : "收藏"}
+                  >
+                    <Star
+                      className="h-3.5 w-3.5"
+                      fill={favSet.has(cmd.id) ? "currentColor" : "none"}
+                      stroke={undefined}
+                    />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

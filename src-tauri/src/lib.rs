@@ -27,6 +27,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // 初始化应用状态（DB 等）
@@ -36,7 +37,12 @@ pub fn run() {
             app.manage(state);
 
             // 启动调度器
-            crate::core::scheduler::start(app_handle, db);
+            crate::core::scheduler::start(app_handle.clone(), db);
+
+            // 注册全局快捷键 (Cmd+Shift+Space) 唤起启动器
+            if let Err(e) = crate::commands::plugin::register_palette_shortcut(&app_handle) {
+                tracing::warn!("注册启动器快捷键失败: {e}");
+            }
 
             Ok(())
         })
@@ -82,6 +88,23 @@ pub fn run() {
             commands::history::delete_history,
             commands::history::clear_history,
             commands::history::search_history,
+            // ===== 分类树 (Phase 7) =====
+            commands::category::list_category_tree,
+            commands::category::create_category,
+            commands::category::rename_category,
+            commands::category::move_category,
+            commands::category::delete_category,
+            commands::category::move_command,
+            // ===== 收藏 (Phase 7) =====
+            commands::favorite::list_favorites,
+            commands::favorite::add_favorite,
+            commands::favorite::remove_favorite,
+            commands::favorite::reorder_favorites,
+            // ===== 插件 (Phase 7) =====
+            commands::plugin::list_plugins,
+            commands::plugin::uninstall_plugin,
+            commands::plugin::toggle_plugin,
+            commands::plugin::execute_js_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

@@ -1,6 +1,9 @@
+pub mod category;
 pub mod execution;
+pub mod favorite;
 pub mod history;
 pub mod library;
+pub mod plugin;
 pub mod schedule;
 pub mod system;
 pub mod workflow;

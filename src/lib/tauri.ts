@@ -328,6 +328,78 @@ export interface ClearHistoryResult {
   deleted: number;
 }
 
+// ==================== 分类树 (Phase 7) ====================
+
+export interface Category {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  icon: string | null;
+  sort_order: number;
+  created_at: number;
+}
+
+export interface CategoryNode {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  icon: string | null;
+  sort_order: number;
+  subcategories: CategoryNode[];
+  commands: Command[];
+}
+
+export interface CreateCategoryInput {
+  name: string;
+  parent_id?: string;
+  icon?: string;
+}
+
+export interface MoveCategoryInput {
+  id: string;
+  new_parent_id?: string;
+}
+
+export interface MoveCommandInput {
+  command_id: string;
+  category_id?: string;
+}
+
+// ==================== 收藏 (Phase 7) ====================
+
+export interface Favorite {
+  command_id: string;
+  sort_order: number;
+  created_at: number;
+  command: Command | null;
+}
+
+export interface ReorderFavoritesInput {
+  command_ids: string[];
+}
+
+// ==================== 插件 (Phase 7) ====================
+
+export interface Plugin {
+  id: string;
+  name: string;
+  version: string;
+  author: string | null;
+  description: string | null;
+  format: string;
+  entry: string;
+  manifest: string;
+  enabled: boolean;
+  installed_at: number;
+  updated_at: number;
+}
+
+export interface PluginInfo {
+  plugin: Plugin;
+  has_manifest: boolean;
+  size_bytes: number;
+}
+
 // ==================== API ====================
 
 export const api = {
@@ -386,6 +458,32 @@ export const api = {
     remove: (id: string) => call<void>("delete_history", { id }),
     clear: (input: ClearHistoryInput) =>
       call<ClearHistoryResult>("clear_history", { input }),
+  },
+  category: {
+    tree: () => call<CategoryNode[]>("list_category_tree"),
+    create: (input: CreateCategoryInput) => call<string>("create_category", { input }),
+    rename: (id: string, name: string) =>
+      call<void>("rename_category", { id, input: { id, name } }),
+    move: (id: string, new_parent_id: string | null) =>
+      call<void>("move_category", { id, input: { id, new_parent_id } }),
+    remove: (id: string) => call<void>("delete_category", { id }),
+    moveCommand: (command_id: string, category_id: string | null) =>
+      call<void>("move_command", { input: { command_id, category_id } }),
+  },
+  favorite: {
+    list: () => call<Favorite[]>("list_favorites"),
+    add: (command_id: string) => call<void>("add_favorite", { commandId: command_id }),
+    remove: (command_id: string) => call<void>("remove_favorite", { commandId: command_id }),
+    reorder: (command_ids: string[]) =>
+      call<void>("reorder_favorites", { input: { command_ids } }),
+  },
+  plugin: {
+    list: () => call<PluginInfo[]>("list_plugins"),
+    remove: (id: string) => call<void>("uninstall_plugin", { id }),
+    toggle: (id: string, enabled: boolean) =>
+      call<void>("toggle_plugin", { id, enabled }),
+    execute: (plugin_id: string, func: string, args: unknown) =>
+      call<unknown>("execute_js_plugin", { pluginId: plugin_id, function: func, args }),
   },
 };
 

@@ -253,6 +253,58 @@ pub struct WorkflowDetail {
     pub edges: Vec<WorkflowEdge>,
 }
 
+// ==================== 分类树 (Phase 7) ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Category {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub icon: Option<String>,
+    pub sort_order: i32,
+    pub created_at: i64,
+}
+
+/// 树节点: 分类 + 子分类 + 命令
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryNode {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub icon: Option<String>,
+    pub sort_order: i32,
+    pub subcategories: Vec<CategoryNode>,
+    pub commands: Vec<Command>,
+}
+
+// ==================== 收藏 (Phase 7) ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Favorite {
+    pub command_id: String,
+    pub sort_order: i32,
+    pub created_at: i64,
+    /// join 出来的命令详情 (前端用)
+    pub command: Option<Command>,
+}
+
+// ==================== 插件 (Phase 7) ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Plugin {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub format: String, // 'js' | 'wasm'
+    pub entry: String,
+    pub manifest: String,
+    pub enabled: bool,
+    pub installed_at: i64,
+    pub updated_at: i64,
+}
+
 impl WorkflowDetail {
     /// 加载工作流完整详情（含 nodes 和 edges）
     pub fn load_full(db: &DbPool, id: &str) -> AppResult<Option<Self>> {
