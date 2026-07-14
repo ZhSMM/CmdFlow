@@ -157,7 +157,7 @@ pub async fn run_command(
         command_id: detail.id.clone(),
         command_name: detail.name.clone(),
         command_type: detail.command_type.as_str().to_string(),
-        template: rendered,
+        template: rendered.clone(),
         working_dir: cwd,
         env: env_rendered,
         timeout_ms: detail.timeout_ms.map(|t| t as u64),
@@ -168,9 +168,28 @@ pub async fn run_command(
     let registry = state.execution_registry.clone();
     let app_clone = app.clone();
 
+    tracing::info!(
+        "[run_command] called exec_id={} command_id={} command_name={} template={:?}",
+        execution_id,
+        detail.id,
+        detail.name,
+        rendered
+    );
+
     // 直接 await 执行结果并回显给调用方。
     // 进程内仍会通过 `run-event` 推送流式日志，前端可以实时显示。
     let result = executor::execute(app_clone, db, registry, spec).await?;
+
+    tracing::info!(
+        "[run_command] returning exec_id={} status={} exit_code={:?} stdout_len={} stderr_len={} error={:?} preview={:?}",
+        execution_id,
+        result.status.as_str(),
+        result.exit_code,
+        result.stdout.len(),
+        result.stderr.len(),
+        result.error,
+        result.stdout.chars().take(120).collect::<String>()
+    );
 
     Ok(RunCommandResponse {
         execution_id,

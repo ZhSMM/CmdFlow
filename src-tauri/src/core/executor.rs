@@ -93,8 +93,17 @@ pub async fn execute(
 ) -> AppResult<ExecutionResult> {
     let started_at = chrono::Utc::now().timestamp();
 
+    tracing::info!(
+        "[executor] start exec_id={} cmd={} type={} template={:?}",
+        spec.execution_id,
+        spec.command_name,
+        spec.command_type,
+        spec.template
+    );
+
     // 1. 写 executions 表
     insert_execution(&db, &spec, started_at).await?;
+    tracing::info!("[executor] insert_execution OK exec_id={}", spec.execution_id);
 
     // 2. 注册 cancel handle
     let cancel = registry.register(spec.execution_id.clone()).await;
@@ -121,6 +130,12 @@ pub async fn execute(
 
     // 4. 启动子进程
     let (program, args) = build_command(&spec.command_type, &spec.template);
+    tracing::info!(
+        "[executor] spawning program={} args={:?} cwd={:?}",
+        program,
+        args,
+        spec.working_dir
+    );
     let mut cmd = Command::new(&program);
     cmd.args(&args)
         .stdin(Stdio::null())
@@ -144,8 +159,12 @@ pub async fn execute(
 
     let spawn_result = cmd.spawn();
     let mut child = match spawn_result {
-        Ok(c) => c,
+        Ok(c) => {
+            tracing::info!("[executor] spawn OK exec_id={} pid={:?}", spec.execution_id, c.id());
+            c
+        }
         Err(e) => {
+            tracing::error!("[executor] spawn FAILED exec_id={} err={}", spec.execution_id, e);
             let result = ExecutionResult {
                 execution_id: spec.execution_id.clone(),
                 exit_code: None,
@@ -184,6 +203,7 @@ pub async fn execute(
         BufReader::new(stderr),
         stderr_buf.clone(),
     );
+    tracing::info!("[executor] log readers spawned exec_id={}", spec.execution_id);
 
     // 6. 等待完成 / 超时 / 取消
     let start = Instant::now();
@@ -202,12 +222,25 @@ pub async fn execute(
     };
 
     let duration_ms = start.elapsed().as_millis() as u64;
+    tracing::info!(
+        "[executor] child wait done exec_id={} duration_ms={} wait_result={:?}",
+        spec.execution_id,
+        duration_ms,
+        wait_result.as_ref().map(|r| r.as_ref().map(|es| es.code()).unwrap_or(None))
+    );
 
     // 7. 等待流读完
     let _ = stdout_task.await;
     let _ = stderr_task.await;
     let stdout_text = stdout_buf.lock().await.clone();
     let stderr_text = stderr_buf.lock().await.clone();
+    tracing::info!(
+        "[executor] captured stdout_len={} stderr_len={} exec_id={} preview={:?}",
+        stdout_text.len(),
+        stderr_text.len(),
+        spec.execution_id,
+        stdout_text.chars().take(120).collect::<String>()
+    );
 
     // 8. 构造结果
     let (status, exit_code, error) = match wait_result {
@@ -241,10 +274,19 @@ pub async fn execute(
         exit_code,
         status,
         duration_ms,
-        stdout: stdout_text,
-        stderr: stderr_text,
-        error,
+        stdout: stdout_text.clone(),
+        stderr: stderr_text.clone(),
+        error: error.clone(),
     };
+
+    tracing::info!(
+        "[executor] finalize exec_id={} status={:?} exit_code={:?} stdout_len={} stderr_len={}",
+        spec.execution_id,
+        status,
+        exit_code,
+        stdout_text.len(),
+        stderr_text.len()
+    );
 
     // 9. 收尾
     finalize(&app, &db, &spec, &result, started_at).await?;
@@ -292,11 +334,27 @@ where
 {
     tokio::spawn(async move {
         let mut lines = reader.lines();
+        let mut line_count: u32 = 0;
+        tracing::info!(
+            "[log_reader] start exec_id={} stream={:?}",
+            execution_id,
+            stream
+        );
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
+                    line_count += 1;
                     buf.lock().await.push_str(&line);
                     buf.lock().await.push('\n');
+                    if line_count <= 3 || line_count % 50 == 0 {
+                        tracing::info!(
+                            "[log_reader] exec_id={} stream={:?} line#={} content={:?}",
+                            execution_id,
+                            stream,
+                            line_count,
+                            line
+                        );
+                    }
                     emit(
                         &app,
                         &RunEvent::NodeLog {
@@ -308,9 +366,22 @@ where
                         },
                     );
                 }
-                Ok(None) => break,
+                Ok(None) => {
+                    tracing::info!(
+                        "[log_reader] EOF exec_id={} stream={:?} total_lines={}",
+                        execution_id,
+                        stream,
+                        line_count
+                    );
+                    break;
+                }
                 Err(e) => {
-                    tracing::warn!("读取流失败: {e}");
+                    tracing::warn!(
+                        "[log_reader] read err exec_id={} stream={:?} err={}",
+                        execution_id,
+                        stream,
+                        e
+                    );
                     break;
                 }
             }

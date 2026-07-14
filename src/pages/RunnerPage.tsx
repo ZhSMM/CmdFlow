@@ -73,8 +73,10 @@ export function RunnerPage() {
   useEffect(() => {
     if (!executionId) return;
 
+    console.log("[RunnerPage] subscribing to run-event for", executionId);
     const unlistenPromise = onRunEvent((e: RunEvent) => {
       if ((e as any).execution_id !== executionId) return;
+      console.log("[RunnerPage] event", e.kind, e);
       switch (e.kind) {
         case "execution_started":
           termRef.current?.clear();
@@ -110,6 +112,7 @@ export function RunnerPage() {
 
     return () => {
       unlistenPromise.then((u) => u());
+      console.log("[RunnerPage] unsubscribed for", executionId);
     };
   }, [executionId, qc]);
 
@@ -133,6 +136,7 @@ export function RunnerPage() {
 
   const doRun = async (override = false) => {
     if (!commandId) return;
+    console.log("[doRun] start", { commandId, override });
     setError(null);
     setRunState("running");
     setShowConfirm(false);
@@ -142,6 +146,17 @@ export function RunnerPage() {
         params: values,
         override_safety: override,
       });
+      console.log("[doRun] got response", {
+        exec_id: res.execution_id,
+        status: res.status,
+        exit_code: res.exit_code,
+        duration_ms: res.duration_ms,
+        stdout_len: res.stdout?.length ?? 0,
+        stderr_len: res.stderr?.length ?? 0,
+        error: res.error,
+        stdout_preview: (res.stdout ?? "").slice(0, 200),
+        stderr_preview: (res.stderr ?? "").slice(0, 200),
+      });
       setExecutionId(res.execution_id);
       // 后端现在同步 await 执行完成并回显完整结果，
       // 这里把退出码、状态、错误直接写回 UI，避免依赖事件时序。
@@ -150,17 +165,26 @@ export function RunnerPage() {
       if (res.error) {
         setError(res.error);
       }
+      const termOk = !!termRef.current;
+      console.log("[doRun] termRef.current is", termOk ? "set" : "null");
       termRef.current?.writeln(
         `\r\n\x1b[${res.status === "success" ? "32" : "31"}m■ 执行结束: ${res.status} · ${formatDuration(res.duration_ms)}\x1b[0m`,
       );
       if (res.stdout) {
+        console.log(`[doRun] writing stdout len=${res.stdout.length} to terminal`);
         termRef.current?.write(res.stdout);
+      } else {
+        console.log("[doRun] stdout is empty");
       }
       if (res.stderr) {
+        console.log(`[doRun] writing stderr len=${res.stderr.length} to terminal`);
         termRef.current?.write(`\x1b[31m${res.stderr}\x1b[0m`);
+      } else {
+        console.log("[doRun] stderr is empty");
       }
       qc.invalidateQueries({ queryKey: ["executions"] });
     } catch (e) {
+      console.error("[doRun] exception", e);
       setError((e as TauriError).message);
       setRunState("failed");
     }

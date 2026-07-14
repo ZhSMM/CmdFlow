@@ -85,7 +85,7 @@ pub fn run() {
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,cmdflow_lib=debug,tauri=info"));
+        .unwrap_or_else(|_| EnvFilter::new("info,cmdflow_lib=debug,tauri=info,cmdflow_lib::core::executor=trace,cmdflow_lib::core::events=trace"));
 
     tracing_subscriber::registry()
         .with(filter)

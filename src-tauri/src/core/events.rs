@@ -102,7 +102,16 @@ pub const RUN_EVENT: &str = "run-event";
 
 /// 推送事件给前端
 pub fn emit(app: &AppHandle, event: &RunEvent) {
+    // 每 50 条 node_log 记一次，其它全打 debug，避免日志洪水
+    match event {
+        RunEvent::NodeLog { execution_id, .. } => {
+            tracing::debug!("[emit] run-event kind=node_log exec_id={}", execution_id);
+        }
+        _ => {
+            tracing::info!("[emit] run-event {:?}", event);
+        }
+    }
     if let Err(e) = app.emit(RUN_EVENT, event) {
-        tracing::error!("推送 run-event 失败: {e}");
+        tracing::error!("[emit] 推送 run-event 失败: {e}");
     }
 }

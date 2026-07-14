@@ -35,18 +35,21 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
     const bufferRef = useRef<BufferedOp[]>([]);
 
     useEffect(() => {
+      console.log("[Terminal] mount, loading xterm...");
       if (!containerRef.current) return;
 
       let dispose: (() => void) | null = null;
 
       // 动态 import xterm (~310KB) - 不进主 bundle
       (async () => {
+        const t0 = performance.now();
         const [{ Terminal: XTerm }, { FitAddon }, cssMod] = await Promise.all([
           import("@xterm/xterm"),
           import("@xterm/addon-fit"),
           import("@xterm/xterm/css/xterm.css"),
         ]);
         void cssMod;
+        console.log(`[Terminal] xterm loaded in ${(performance.now() - t0).toFixed(0)}ms`);
 
         const term = new XTerm({
           theme: {
@@ -76,17 +79,21 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
 
         // 先把缓冲回放，再开放实时写入
         const buffered = bufferRef.current;
-        for (const op of buffered) {
-          if (op.kind === "write") {
-            term.write(op.content);
-          } else {
-            term.writeln(op.content);
+        if (buffered.length > 0) {
+          console.log(`[Terminal] flushing ${buffered.length} buffered ops`);
+          for (const op of buffered) {
+            if (op.kind === "write") {
+              term.write(op.content);
+            } else {
+              term.writeln(op.content);
+            }
           }
+          bufferRef.current = [];
         }
-        bufferRef.current = [];
 
         termRef.current = term;
         fitRef.current = fit;
+        console.log("[Terminal] ready");
 
         const resize = () => {
           try {
@@ -113,7 +120,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           termRef.current = null;
           fitRef.current = null;
         };
-      })();
+      })().catch((e) => {
+        console.error("[Terminal] failed to load xterm:", e);
+      });
 
       return () => {
         if (dispose) dispose();
@@ -127,6 +136,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         if (term) {
           term.write(s);
         } else {
+          console.log(`[Terminal.write] xterm not ready, buffer len=${bufferRef.current.length} data_len=${s.length}`);
           // XTerm 还没起来，先排队
           bufferRef.current.push({ kind: "write", content: s });
         }
@@ -136,6 +146,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         if (term) {
           term.writeln(s);
         } else {
+          console.log(`[Terminal.writeln] xterm not ready, buffer len=${bufferRef.current.length} data_len=${s.length}`);
           bufferRef.current.push({ kind: "writeln", content: s });
         }
       },
