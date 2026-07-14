@@ -15,6 +15,7 @@ pub mod nodes;
 pub mod security;
 pub mod state;
 pub mod storage;
+pub mod wasm_runtime;
 
 use tauri::Manager;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -107,6 +108,7 @@ pub fn run() {
             commands::plugin::uninstall_plugin,
             commands::plugin::toggle_plugin,
             commands::plugin::execute_js_plugin,
+            commands::plugin::execute_wasm_plugin,
             // ===== YAML 导入导出 (Phase 8) =====
             commands::yaml_io::export_workflow,
             commands::yaml_io::import_workflow,

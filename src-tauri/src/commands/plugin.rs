@@ -1,10 +1,10 @@
-//! 插件 IPC (Phase 7)
+//! 插件 IPC (Phase 7/8/9)
 //!
 //! 插件目录: `app_data_dir/plugins/`
 //! 每个插件一个子目录: `<plugin-name>/{manifest.json, index.js, plugin.wasm}`
 //!
-//! Phase 7 实现: JS 插件 (QuickJS/Boa 引擎)
-//! Phase 8: WASM 插件
+//! Phase 7: JS 插件 (QuickJS/Boa 引擎)
+//! Phase 8: WASM 插件 (wasmtime)
 //!
 //! manifest.json 格式:
 //! ```json
@@ -14,8 +14,8 @@
 //!   "version": "1.0.0",
 //!   "author": "...",
 //!   "description": "...",
-//!   "format": "js",
-//!   "entry": "index.js",
+//!   "format": "js",  // "js" | "wasm"
+//!   "entry": "index.js",  // 或 "plugin.wasm"
 //!   "permissions": ["fs.read", "http"]
 //! }
 //! ```
@@ -249,5 +249,71 @@ pub async fn execute_js_plugin(
         "function": function,
         "result": res.result,
         "logs": res.logs,
+    }))
+}
+
+/// 调用 WASM 插件 (Phase 9.3,基于 wasmtime)
+///
+/// 合约见 `src/wasm_runtime.rs`。
+#[tauri::command]
+pub async fn execute_wasm_plugin(
+    app: AppHandle,
+    _state: State<'_, AppState>,
+    plugin_id: String,
+    function: String,
+    args: serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    // 读插件 manifest 找 entry
+    let dir = plugins_dir(&app)?;
+    let plugin_dir = dir.join(&plugin_id);
+    let manifest_path = plugin_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Err(AppError::not_found(format!("plugin: {plugin_id}")));
+    }
+    let manifest_str = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| AppError::other(format!("读 manifest 失败: {e}")))?;
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| AppError::other(format!("manifest 解析失败: {e}")))?;
+    if manifest.format != "wasm" {
+        return Err(AppError::other(format!(
+            "插件 {plugin_id} 不是 wasm 格式 (实际: {})",
+            manifest.format
+        )));
+    }
+
+    let entry_path = plugin_dir.join(&manifest.entry);
+
+    // 转 args: 允许 Object/Array/任何 JSON 值
+    let input_value = args;
+
+    // 阻塞执行,加 10s 超时
+    let entry_path_clone = entry_path.clone();
+    let function_clone = function.clone();
+    let exec = tokio::task::spawn_blocking(move || {
+        let inst = crate::wasm_runtime::WasmInstance::from_file(&entry_path_clone)?;
+        inst.call(&function_clone, &input_value)
+    });
+
+    let result = match timeout(Duration::from_secs(10), exec).await {
+        Ok(Ok(r)) => r?,
+        Ok(Err(join_err)) => {
+            return Err(AppError::other(format!("wasm 执行 join 失败: {join_err}")));
+        }
+        Err(_) => {
+            return Err(AppError::other(format!(
+                "wasm 插件 {plugin_id} 执行超时 (10s)"
+            )));
+        }
+    };
+
+    tracing::info!("wasm 插件 {plugin_id}::{function} 执行完毕");
+    Ok(serde_json::json!({
+        "plugin": plugin_id,
+        "function": function,
+        "format": "wasm",
+        "result": result,
     }))
 }

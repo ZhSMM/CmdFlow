@@ -493,6 +493,8 @@ export const api = {
       call<void>("toggle_plugin", { id, enabled }),
     execute: (plugin_id: string, func: string, args: unknown) =>
       call<unknown>("execute_js_plugin", { pluginId: plugin_id, function: func, args }),
+    executeWasm: (plugin_id: string, func: string, args: unknown) =>
+      call<unknown>("execute_wasm_plugin", { pluginId: plugin_id, function: func, args }),
   },
   yaml: {
     exportWorkflow: (id: string) => call<string>("export_workflow", { id }),

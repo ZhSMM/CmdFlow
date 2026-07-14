@@ -38,6 +38,9 @@ keyring = "2"
 # JS plugin runtime (Boa engine, pure Rust)
 boa_engine = "0.20"
 
+# WASM plugin runtime (wasmtime) — 禁用 cache 避免 toml 版本冲突
+wasmtime = { version = "24", default-features = false, features = ["runtime", "std", "cranelift"] }
+
 # SQLite
 rusqlite = { version = "0.32", features = ["bundled"] }
 r2d2 = "0.8"
@@ -50,6 +53,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+wat = "1"
 
 [profile.release]
 panic = "abort"
