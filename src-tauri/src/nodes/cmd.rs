@@ -248,7 +248,12 @@ fn build_command(command_type: &crate::storage::models::CommandType, template: &
     use crate::storage::models::CommandType;
     match command_type {
         CommandType::Cmd => ("cmd".into(), vec!["/c".into(), template.into()]),
-        CommandType::Pwsh => ("pwsh".into(), vec!["-NoProfile".into(), "-Command".into(), template.into()]),
+        CommandType::Pwsh => {
+            // 同样走探测逻辑，pwsh 优先，没有就降级
+            let bin = crate::core::executor::powershell_bin();
+            (bin.into(), vec!["-NoProfile".into(), "-Command".into(), template.into()])
+        }
+        CommandType::PowerShell => ("powershell".into(), vec!["-NoProfile".into(), "-Command".into(), template.into()]),
         CommandType::Python => ("python".into(), vec!["-c".into(), template.into()]),
         CommandType::Node => ("node".into(), vec!["-e".into(), template.into()]),
         CommandType::Bash => ("bash".into(), vec!["-c".into(), template.into()]),

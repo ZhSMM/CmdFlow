@@ -36,7 +36,7 @@ impl Node for ScriptNode {
             "properties": {
                 "language": {
                     "type": "string",
-                    "enum": ["python", "node", "bash", "pwsh"],
+                    "enum": ["python", "node", "bash", "pwsh", "powershell"],
                     "title": "语言"
                 },
                 "code": { "type": "string", "title": "代码", "format": "textarea" },
@@ -60,7 +60,11 @@ impl Node for ScriptNode {
             "python" => ("python".to_string(), vec!["-c".to_string(), cfg.code.clone()]),
             "node" => ("node".to_string(), vec!["-e".to_string(), cfg.code.clone()]),
             "bash" => ("bash".to_string(), vec!["-c".to_string(), cfg.code.clone()]),
-            "pwsh" => ("pwsh".to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), cfg.code.clone()]),
+            "pwsh" => {
+                let bin = crate::core::executor::powershell_bin();
+                (bin.to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), cfg.code.clone()])
+            }
+            "powershell" => ("powershell".to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), cfg.code.clone()]),
             other => return Ok(NodeOutput::failed(format!("不支持的脚本语言: {other}"))),
         };
 

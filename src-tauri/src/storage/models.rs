@@ -19,7 +19,10 @@ use crate::storage::db::DbPool;
 #[serde(rename_all = "lowercase")]
 pub enum CommandType {
     Cmd,
+    /// PowerShell 7+ (`pwsh.exe`)，找不到时自动降级到 Windows PowerShell 5.1
     Pwsh,
+    /// 明确指定 Windows PowerShell 5.1 (`powershell.exe`)，老机器/Sever Core 才有
+    PowerShell,
     Python,
     Node,
     Bash,
@@ -31,6 +34,7 @@ impl CommandType {
         match self {
             CommandType::Cmd => "cmd",
             CommandType::Pwsh => "pwsh",
+            CommandType::PowerShell => "powershell",
             CommandType::Python => "python",
             CommandType::Node => "node",
             CommandType::Bash => "bash",
@@ -42,6 +46,7 @@ impl CommandType {
         Some(match s {
             "cmd" => Self::Cmd,
             "pwsh" => Self::Pwsh,
+            "powershell" => Self::PowerShell,
             "python" => Self::Python,
             "node" => Self::Node,
             "bash" => Self::Bash,

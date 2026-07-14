@@ -18,7 +18,8 @@ interface CommandEditorProps {
 
 const COMMAND_TYPES: { value: CommandType; label: string; desc: string }[] = [
   { value: "cmd", label: "CMD", desc: "Windows cmd.exe" },
-  { value: "pwsh", label: "PowerShell", desc: "PowerShell Core / Windows PowerShell" },
+  { value: "pwsh", label: "PowerShell 7+", desc: "pwsh.exe；找不到自动降级到 powershell.exe" },
+  { value: "powershell", label: "PowerShell 5.1", desc: "强制用 Windows PowerShell (老机器/Server Core)" },
   { value: "python", label: "Python", desc: "python -c" },
   { value: "node", label: "Node", desc: "node -e" },
   { value: "bash", label: "Bash", desc: "bash -c" },

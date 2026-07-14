@@ -261,10 +261,19 @@ fn build_command(command_type: &str, template: &str) -> (String, Vec<String>) {
             ("cmd".to_string(), vec!["/c".to_string(), template.to_string()])
         }
         "pwsh" => {
-            ("pwsh".to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()])
+            // PowerShell 7+ 优先，没有就降级到 Windows PowerShell 5.1
+            let bin = powershell_bin();
+            (
+                bin.to_string(),
+                vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()],
+            )
         }
         "powershell" => {
-            ("powershell".to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()])
+            // 明确指定 Windows PowerShell 5.1，不做探测
+            (
+                "powershell".to_string(),
+                vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()],
+            )
         }
         "python" => {
             ("python".to_string(), vec!["-c".to_string(), template.to_string()])
@@ -278,6 +287,52 @@ fn build_command(command_type: &str, template: &str) -> (String, Vec<String>) {
         // 自定义/未识别:直接当作可执行文件名
         other => (other.to_string(), vec![template.to_string()]),
     }
+}
+
+/// 探测机器上能用的 PowerShell：优先 pwsh.exe（PowerShell 7+），找不到用 powershell.exe（5.1）。
+/// 首次调用时扫描 PATH 一次，结果缓存到静态变量，后续直接读。
+pub(crate) fn powershell_bin() -> &'static str {
+    use std::sync::OnceLock;
+    static BIN: OnceLock<&'static str> = OnceLock::new();
+    BIN.get_or_init(|| {
+        let pwsh = find_on_path("pwsh");
+        let legacy = find_on_path("powershell");
+        let chosen = if pwsh {
+            "pwsh"
+        } else if legacy {
+            "powershell"
+        } else {
+            // 都没有：先尝试 pwsh，让 spawn 阶段报清晰错误
+            tracing::warn!("[executor] 未找到 pwsh.exe 或 powershell.exe，默认回退到 pwsh");
+            "pwsh"
+        };
+        tracing::info!("[executor] PowerShell binary: {} (pwsh={}, legacy={})", chosen, pwsh, legacy);
+        chosen
+    })
+}
+
+#[cfg(windows)]
+fn find_on_path(name: &str) -> bool {
+    use std::path::PathBuf;
+    let exts = [".exe", ".cmd", ".bat", ""];
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            for ext in exts {
+                let mut p: PathBuf = dir.clone();
+                let file = if ext.is_empty() { name.to_string() } else { format!("{name}{ext}") };
+                p.push(&file);
+                if p.is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(windows))]
+fn find_on_path(_name: &str) -> bool {
+    true
 }
 
 fn spawn_log_reader<R>(

@@ -27,7 +27,18 @@ export async function call<T>(cmd: string, args?: Record<string, unknown>): Prom
 
 // ==================== 类型（与 Rust 端 models 对应） ====================
 
-export type CommandType = "cmd" | "pwsh" | "python" | "node" | "bash" | "script";
+export type CommandType = "cmd" | "pwsh" | "powershell" | "python" | "node" | "bash" | "script";
+
+/** UI 显示用的中文标签（按 PowerShell 类型加注释） */
+export const COMMAND_TYPE_LABEL: Record<CommandType, string> = {
+  cmd: "cmd",
+  pwsh: "PowerShell 7+ (自动降级)",
+  powershell: "PowerShell 5.1 (旧版)",
+  python: "python",
+  node: "node",
+  bash: "bash",
+  script: "script",
+};
 
 export type NodeStatus = "pending" | "running" | "success" | "failed" | "cancelled" | "timeout";
 export type StreamKind = "stdout" | "stderr" | "system";
