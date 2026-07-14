@@ -38,7 +38,21 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       console.log("[Terminal] mount, loading xterm...");
       if (!containerRef.current) return;
 
-      let dispose: (() => void) | null = null;
+      // StrictMode 下 effect 会被双调用：第一次的 cleanup 会在 async 完成前跑，
+      // `dispose` 还来不及赋值，导致第一个 xterm 永远不被释放，叠在容器上。
+      // 用 cancelled 标记：cleanup 立即置 true，async 完成时如果 cancelled 就
+      // 直接 dispose 掉刚创建好的 xterm，杜绝双实例。
+      let cancelled = false;
+      let term: XTerm | null = null;
+      let fit: FitAddon | null = null;
+      let ro: ResizeObserver | null = null;
+      const onResize = () => {
+        try {
+          fit?.fit();
+        } catch {
+          // ignore
+        }
+      };
 
       // 动态 import xterm (~310KB) - 不进主 bundle
       (async () => {
@@ -51,7 +65,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         void cssMod;
         console.log(`[Terminal] xterm loaded in ${(performance.now() - t0).toFixed(0)}ms`);
 
-        const term = new XTerm({
+        // effect 已被清理（StrictMode 第二次 mount 之前），不再创建 xterm
+        if (cancelled || !containerRef.current) {
+          console.log("[Terminal] cancelled before open, skip");
+          return;
+        }
+
+        const newTerm = new XTerm({
           theme: {
             background: "#0f172a",
             foreground: "#e2e8f0",
@@ -67,12 +87,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           disableStdin: true,
           scrollback: 5000,
         });
-        const fit = new FitAddon();
-        term.loadAddon(fit);
-        term.open(containerRef.current!);
+        const newFit = new FitAddon();
+        newTerm.loadAddon(newFit);
+        newTerm.open(containerRef.current!);
 
         try {
-          fit.fit();
+          newFit.fit();
         } catch {
           // ignore
         }
@@ -83,49 +103,55 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
           console.log(`[Terminal] flushing ${buffered.length} buffered ops`);
           for (const op of buffered) {
             if (op.kind === "write") {
-              term.write(op.content);
+              newTerm.write(op.content);
             } else {
-              term.writeln(op.content);
+              newTerm.writeln(op.content);
             }
           }
           bufferRef.current = [];
         }
 
-        termRef.current = term;
-        fitRef.current = fit;
-        console.log("[Terminal] ready");
+        term = newTerm;
+        fit = newFit;
+        termRef.current = newTerm;
+        fitRef.current = newFit;
+        console.log("[Terminal] ready, id=", newTerm);
 
-        const resize = () => {
-          try {
-            fit.fit();
-          } catch {
-            // ignore
-          }
-        };
-        const ro = new ResizeObserver(resize);
+        ro = new ResizeObserver(onResize);
         ro.observe(containerRef.current!);
-        window.addEventListener("resize", resize);
+        window.addEventListener("resize", onResize);
 
         onReady?.({
-          write: (s) => term.write(s),
-          writeln: (s) => term.writeln(s),
-          clear: () => term.clear(),
-          fit: () => fit.fit(),
+          write: (s) => newTerm.write(s),
+          writeln: (s) => newTerm.writeln(s),
+          clear: () => newTerm.clear(),
+          fit: () => newFit.fit(),
         });
-
-        dispose = () => {
-          ro.disconnect();
-          window.removeEventListener("resize", resize);
-          term.dispose();
-          termRef.current = null;
-          fitRef.current = null;
-        };
       })().catch((e) => {
         console.error("[Terminal] failed to load xterm:", e);
       });
 
       return () => {
-        if (dispose) dispose();
+        console.log("[Terminal] cleanup, cancelled was", cancelled, "term?", !!term);
+        cancelled = true;
+        if (ro) {
+          ro.disconnect();
+          ro = null;
+        }
+        window.removeEventListener("resize", onResize);
+        if (term) {
+          // 这里 dispose 把 xterm 的 DOM 移掉
+          term.dispose();
+          console.log("[Terminal] disposed xterm");
+        }
+        if (termRef.current === term) {
+          termRef.current = null;
+        }
+        if (fitRef.current === fit) {
+          fitRef.current = null;
+        }
+        term = null;
+        fit = null;
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
