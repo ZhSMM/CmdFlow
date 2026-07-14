@@ -12,6 +12,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0001_init",
         include_str!("../../../migrations/0001_init.sql"),
     ),
+    (
+        "0002_relax_executions_fk",
+        include_str!("../../../migrations/0002_relax_executions_fk.sql"),
+    ),
 ];
 
 pub fn run(conn: &mut Connection) -> AppResult<()> {
