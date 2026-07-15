@@ -1,0 +1,114 @@
+name: CI
+
+# 门禁流水线: PR + push 到 main 时跑
+# 内容: 锁文件安装、前后端类型检查、Rust 单测、前端生产构建
+# 任意一步失败 → 不让 merge
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ===== 前端 (Node + pnpm) =====
+  frontend:
+    name: Frontend (lint + typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # esbuild 的 postinstall 在 pnpm 默认被禁,需要手动批准
+      - name: Approve esbuild build
+        run: pnpm rebuild esbuild
+
+      - name: TypeScript 类型检查
+        run: pnpm exec tsc -b
+
+      - name: Vite 生产构建
+        run: pnpm exec vite build
+
+  # ===== 后端 (Rust + Cargo) =====
+  backend:
+    name: Rust (fmt + clippy + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/swift-cache@v1
+        with:
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+
+      - name: Cache sccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: ${{ runner.os }}-sccache-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install Linux deps (webkit2gtk)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev
+
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run unit tests
+        working-directory: src-tauri
+        run: cargo test --lib
+
+  # ===== 整体检查:任意 job 失败即整体失败 =====
+  full-check:
+    name: Full Check
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+    if: always()
+    steps:
+      - name: Check status
+        run: |
+          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.backend.result }}" != "success" ]; then
+            echo "❌ 门禁未通过 (frontend=${{ needs.frontend.result }}, backend=${{ needs.backend.result }})"
+            exit 1
+          fi
+          echo "✅ 所有门禁通过"

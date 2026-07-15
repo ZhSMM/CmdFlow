@@ -1,6 +1,6 @@
 [package]
 name = "cmdflow"
-version = "0.1.0"
+version = "0.2.0"
 description = "本地命令编排工具"
 authors = ["you"]
 edition = "2021"
