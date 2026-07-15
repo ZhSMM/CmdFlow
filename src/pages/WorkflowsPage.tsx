@@ -233,7 +233,7 @@ function WorkflowEditorWrapper({ id, onBack }: { id: string; onBack: () => void 
           ← 返回列表
         </Button>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         <WorkflowEditor workflowId={id} />
       </div>
     </div>
