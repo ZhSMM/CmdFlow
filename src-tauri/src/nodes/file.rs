@@ -19,6 +19,7 @@ struct FileConfig {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // 预留给未来「按 pattern 操作」功能
     pattern: Option<String>,
 }
 

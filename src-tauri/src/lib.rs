@@ -18,7 +18,6 @@ pub mod storage;
 pub mod wasm_runtime;
 
 use tauri::Manager;
-use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// 启动 Tauri 应用

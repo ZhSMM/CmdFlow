@@ -7,7 +7,6 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::time::Duration;
 
 use super::node::{Node, NodeContext, NodeOutput};
 use crate::core::interpolation::InterpContext;
@@ -122,10 +121,8 @@ fn resolve_collection(expr: &str, ctx: &NodeContext) -> Option<Vec<Value>> {
     }
 
     // JSON 数组
-    if let Ok(v) = serde_json::from_str::<Value>(&rendered) {
-        if let Value::Array(arr) = v {
-            return Some(arr);
-        }
+    if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(&rendered) {
+        return Some(arr);
     }
 
     // 单值

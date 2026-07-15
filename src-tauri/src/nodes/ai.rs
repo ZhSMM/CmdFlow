@@ -17,7 +17,7 @@
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::time::Duration;
 use tauri::Manager;

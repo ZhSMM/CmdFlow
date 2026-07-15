@@ -59,10 +59,6 @@ impl Node for SubWorkflowNode {
 
         // 解析 workflow_ref
         let detail = crate::storage::models::WorkflowDetail::load_full(&ctx.db, &cfg.workflow_ref)?
-            .or_else(|| {
-                // 尝试按名称解析
-                None
-            })
             .ok_or_else(|| {
                 crate::error::AppError::not_found(format!("workflow: {}", cfg.workflow_ref))
             })?;

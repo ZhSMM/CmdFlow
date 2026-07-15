@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 use boa_engine::{
     js_string, native_function::NativeFunction, object::ObjectInitializer, property::Attribute,
-    Context, JsArgs, JsError, JsResult, JsValue, Source,
+    Context, JsArgs, JsValue, Source,
 };
 
 use crate::error::{AppError, AppResult};

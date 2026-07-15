@@ -57,7 +57,7 @@ impl EdgeCondition {
         ec
     }
 
-    fn should_traverse(&self, source_status: NodeStatus, source_branches: &[String]) -> bool {
+    fn should_traverse(&self, source_status: NodeStatus, _source_branches: &[String]) -> bool {
         match self.kind.as_str() {
             "always" => true,
             "on_success" => source_status == NodeStatus::Success,
@@ -83,6 +83,7 @@ impl EdgeCondition {
 }
 
 /// 执行一个工作流
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_workflow(
     app: AppHandle,
     db: Arc<DbPool>,
@@ -97,7 +98,7 @@ pub async fn execute_workflow(
     let start = std::time::Instant::now();
 
     // 1. 拓扑排序
-    let topo = topological_sort(&nodes, &edges)?;
+    let _topo = topological_sort(&nodes, &edges)?;
     let parallel_limit = 4; // Phase 2 固定 4 并发
 
     // 2. 推送执行开始
@@ -144,8 +145,7 @@ pub async fn execute_workflow(
         .collect();
 
     let sem = Arc::new(Semaphore::new(parallel_limit));
-    let mut completed_count = 0usize;
-    let total = nodes.len();
+    let _total = nodes.len();
     let mut had_failure = false;
 
     while !queue.is_empty() {
@@ -255,7 +255,6 @@ pub async fn execute_workflow(
                     }
                 }
             }
-            completed_count += 1;
         }
     }
 
@@ -292,15 +291,16 @@ pub async fn execute_workflow(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_one_node(
     app: AppHandle,
     db: Arc<DbPool>,
     execution_id: String,
-    workflow_id: String,
+    _workflow_id: String,
     node: WorkflowNode,
     workflow_params: HashMap<String, String>,
     node_outputs: Arc<tokio::sync::RwLock<HashMap<String, Value>>>,
-    node_statuses: Arc<tokio::sync::RwLock<HashMap<String, NodeOutput>>>,
+    _node_statuses: Arc<tokio::sync::RwLock<HashMap<String, NodeOutput>>>,
     cancel: CancellationToken,
 ) -> AppResult<NodeOutput> {
     let started_at = chrono::Utc::now().timestamp();

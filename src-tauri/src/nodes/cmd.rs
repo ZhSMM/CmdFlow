@@ -84,7 +84,7 @@ impl Node for CmdNode {
         let cfg_params = render_config(&cfg.param_overrides, &interp)?;
 
         // 解析 command_ref 为 ID（支持 name 或 UUID）
-        let command_id = resolve_command_id(&ctx, &cfg_cmd_ref.as_str().unwrap_or("")).await?;
+        let command_id = resolve_command_id(&ctx, cfg_cmd_ref.as_str().unwrap_or("")).await?;
         let command = crate::storage::models::CommandDetail::load(&ctx.db, &command_id)
             .await?
             .ok_or_else(|| crate::error::AppError::not_found(format!("command:{command_id}")))?;
@@ -145,7 +145,6 @@ impl Node for CmdNode {
 
         #[cfg(windows)]
         {
-            use std::os::windows::process::CommandExt;
             const FLAGS: u32 = 0x0000_0200 | 0x0800_0000;
             cmd.creation_flags(FLAGS);
         }
@@ -172,29 +171,19 @@ impl Node for CmdNode {
         let stdout_task = tokio::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};
             let mut lines = BufReader::new(stdout).lines();
-            loop {
-                match lines.next_line().await {
-                    Ok(Some(line)) => {
-                        buf1.lock().await.push_str(&line);
-                        buf1.lock().await.push('\n');
-                        stream_event(&app1, &eid1, &nid1, StreamKind::Stdout, format!("{line}\n"));
-                    }
-                    _ => break,
-                }
+            while let Ok(Some(line)) = lines.next_line().await {
+                buf1.lock().await.push_str(&line);
+                buf1.lock().await.push('\n');
+                stream_event(&app1, &eid1, &nid1, StreamKind::Stdout, format!("{line}\n"));
             }
         });
         let stderr_task = tokio::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};
             let mut lines = BufReader::new(stderr).lines();
-            loop {
-                match lines.next_line().await {
-                    Ok(Some(line)) => {
-                        buf2.lock().await.push_str(&line);
-                        buf2.lock().await.push('\n');
-                        stream_event(&app2, &eid2, &nid2, StreamKind::Stderr, format!("{line}\n"));
-                    }
-                    _ => break,
-                }
+            while let Ok(Some(line)) = lines.next_line().await {
+                buf2.lock().await.push_str(&line);
+                buf2.lock().await.push('\n');
+                stream_event(&app2, &eid2, &nid2, StreamKind::Stderr, format!("{line}\n"));
             }
         });
 

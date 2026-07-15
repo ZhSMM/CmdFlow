@@ -112,7 +112,7 @@ jobs:
 
             - 命令库 + 拖拽改分类 (dnd-kit)
             - DAG 工作流 (可视化编排 + 模板市场)
-            - 多窗口启动器 (Cmd+Shift+Space)
+            - 多窗口启动器 (Ctrl+Alt+P)
             - JS 插件 (Boa engine) + WASM 插件 (wasmtime)
             - AI 节点: 流式输出 + 工具调用
             - 调度 (cron) + 历史 + 收藏

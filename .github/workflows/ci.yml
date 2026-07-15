@@ -83,8 +83,8 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
-        # 暂时只检查, 不 deny warnings (Phase 10 再清理)
-        run: cargo clippy --all-targets --no-deps
+        # 任何 warning 都视为错误，把零警报送进 CI 门禁
+        run: cargo clippy --all-targets --no-deps -- -D warnings
 
       - name: Run unit tests
         working-directory: src-tauri

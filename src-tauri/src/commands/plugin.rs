@@ -160,13 +160,26 @@ pub async fn toggle_plugin(app: AppHandle, id: String, enabled: bool) -> AppResu
     Ok(())
 }
 
-/// 注册全局快捷键 Cmd+Shift+Space 唤起启动器独立窗口 (Phase 9.4)
+/// 注册全局快捷键 Ctrl+Alt+P 唤起启动器独立窗口 (Phase 9.4)
+///
+/// 原来用 Cmd+Shift+Space 跟 Windows Search / 某些中文输入法冲突，
+/// 这台机器上注册时直接报 "HotKey already registered"（被 OS 占用），
+/// 启动器改用 Ctrl+Alt+P 通用、且不冲突。
+/// 后续要做成可在 settings 里改。
 pub fn register_palette_shortcut(app: &AppHandle) -> AppResult<()> {
-    use tauri::Manager;
-    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
+    let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyP);
+    let gs = app.global_shortcut();
+
+    // 之前 Force Quit / dev 热重启会让 plugin 进程里残留同组合键的 handler，
+    // 再 on_shortcut 就会报 "HotKey already registered"。
+    // unregister_all 把整个 plugin 管的快捷键都清掉，再装新的 — 反正我们只
+    // 用这一组 Ctrl+Alt+P。
+    if let Err(e) = gs.unregister_all() {
+        tracing::debug!("[palette] unregister_all (正常情况会报 NotRegistered): {e}");
+    }
+
     let app_clone = app.clone();
-    app.global_shortcut()
-        .on_shortcut(shortcut, move |_app, _shortcut, event| {
+    gs.on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
                 // 直接调命令创建/聚焦独立窗口
                 let app_handle = app_clone.clone();
@@ -178,6 +191,7 @@ pub fn register_palette_shortcut(app: &AppHandle) -> AppResult<()> {
             }
         })
         .map_err(|e| AppError::other(format!("注册全局快捷键失败: {e}")))?;
+    tracing::info!("[palette] 全局快捷键 Ctrl+Alt+P 已注册 (启动器)");
     Ok(())
 }
 

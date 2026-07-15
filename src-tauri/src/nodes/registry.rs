@@ -11,7 +11,7 @@ use super::delay::DelayNode;
 use super::file::FileNode;
 use super::http::HttpNode;
 use super::loop_node::LoopNode;
-use super::node::{Node, NodeSchema, SharedNode};
+use super::node::{NodeSchema, SharedNode};
 use super::script::ScriptNode;
 use super::subworkflow::SubWorkflowNode;
 

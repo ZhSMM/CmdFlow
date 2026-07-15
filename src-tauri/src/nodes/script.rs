@@ -65,7 +65,6 @@ impl Node for ScriptNode {
 
         let interp = InterpContext::new();
         let _ = &interp; // 暂不插值，避免破坏脚本结构
-        let cfg = cfg;
         let _ = render_config(&json!({}), &interp);
 
         let (program, args) = match cfg.language.as_str() {
@@ -118,7 +117,6 @@ impl Node for ScriptNode {
 
         #[cfg(windows)]
         {
-            use std::os::windows::process::CommandExt;
             const FLAGS: u32 = 0x0000_0200 | 0x0800_0000;
             cmd.creation_flags(FLAGS);
         }
@@ -145,41 +143,31 @@ impl Node for ScriptNode {
         let stdout_task = tokio::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};
             let mut lines = BufReader::new(stdout).lines();
-            loop {
-                match lines.next_line().await {
-                    Ok(Some(line)) => {
-                        buf1.lock().await.push_str(&line);
-                        buf1.lock().await.push('\n');
-                        crate::nodes::node::stream_event(
-                            &app1,
-                            &eid1,
-                            &nid1,
-                            crate::core::events::StreamKind::Stdout,
-                            format!("{line}\n"),
-                        );
-                    }
-                    _ => break,
-                }
+            while let Ok(Some(line)) = lines.next_line().await {
+                buf1.lock().await.push_str(&line);
+                buf1.lock().await.push('\n');
+                crate::nodes::node::stream_event(
+                    &app1,
+                    &eid1,
+                    &nid1,
+                    crate::core::events::StreamKind::Stdout,
+                    format!("{line}\n"),
+                );
             }
         });
         let stderr_task = tokio::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};
             let mut lines = BufReader::new(stderr).lines();
-            loop {
-                match lines.next_line().await {
-                    Ok(Some(line)) => {
-                        buf2.lock().await.push_str(&line);
-                        buf2.lock().await.push('\n');
-                        crate::nodes::node::stream_event(
-                            &app2,
-                            &eid2,
-                            &nid2,
-                            crate::core::events::StreamKind::Stderr,
-                            format!("{line}\n"),
-                        );
-                    }
-                    _ => break,
-                }
+            while let Ok(Some(line)) = lines.next_line().await {
+                buf2.lock().await.push_str(&line);
+                buf2.lock().await.push('\n');
+                crate::nodes::node::stream_event(
+                    &app2,
+                    &eid2,
+                    &nid2,
+                    crate::core::events::StreamKind::Stderr,
+                    format!("{line}\n"),
+                );
             }
         });
 

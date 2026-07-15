@@ -1,19 +1,11 @@
 //! 分类树 IPC (Phase 7)
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::storage::models::{Category, CategoryNode, Command, CommandType};
-
-// `Option<Option<T>>::flatten` 不可用，写个 helper
-fn flatten_opt<T>(o: Option<Option<T>>) -> Option<T> {
-    match o {
-        Some(inner) => inner,
-        None => None,
-    }
-}
 
 const MAX_DEPTH: i32 = 3; // 根 + 2 级子分类
 
@@ -77,7 +69,7 @@ pub async fn list_category_tree(state: State<'_, AppState>) -> AppResult<Vec<Cat
         parent: Option<&str>,
         cats: &[Category],
         cmds: &mut std::collections::HashMap<String, Vec<Command>>,
-        root_cmds: &mut Vec<Command>,
+        _root_cmds: &mut Vec<Command>, // 仅递归透传，根调用时承载
     ) -> Vec<CategoryNode> {
         let mut nodes: Vec<CategoryNode> = Vec::new();
         let children: Vec<&Category> = cats
@@ -85,7 +77,7 @@ pub async fn list_category_tree(state: State<'_, AppState>) -> AppResult<Vec<Cat
             .filter(|c| c.parent_id.as_deref() == parent)
             .collect();
         for c in children {
-            let sub = build(Some(&c.id), cats, cmds, root_cmds);
+            let sub = build(Some(&c.id), cats, cmds, _root_cmds);
             let my_cmds = cmds.remove(&c.id).unwrap_or_default();
             nodes.push(CategoryNode {
                 id: c.id.clone(),

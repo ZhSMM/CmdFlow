@@ -143,6 +143,19 @@ pub fn render(template: &str, ctx: &InterpContext) -> AppResult<String> {
 
 static PATTERN: OnceLock<Regex> = OnceLock::new();
 
+/// 工具:当前时间戳 (秒)
+pub fn now_ts() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// 工具:把 DateTime 转为 unix 时间戳
+pub fn dt_to_ts(dt: DateTime<Utc>) -> i64 {
+    dt.timestamp()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,17 +201,4 @@ mod tests {
         let out = render("{{name}} {{name}}", &ctx()).unwrap();
         assert_eq!(out, "world world");
     }
-}
-
-/// 工具:当前时间戳 (秒)
-pub fn now_ts() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-/// 工具:把 DateTime 转为 unix 时间戳
-pub fn dt_to_ts(dt: DateTime<Utc>) -> i64 {
-    dt.timestamp()
 }

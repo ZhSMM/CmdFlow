@@ -176,7 +176,7 @@ fn lookup_value(path: &str, ctx: &NodeContext) -> Value {
         return Value::String(v.clone());
     }
     // 在所有 upstream_outputs 中浅查
-    for (_id, output) in &ctx.upstream_outputs {
+    for output in ctx.upstream_outputs.values() {
         if let Some(v) = output.get(path) {
             return v.clone();
         }

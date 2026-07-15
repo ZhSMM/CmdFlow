@@ -13,7 +13,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Utc};
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -337,6 +337,7 @@ fn dummy_for_compile(_t: DateTime<Utc>) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Timelike, TimeZone};
 
     #[test]
     fn test_cron_validation() {
