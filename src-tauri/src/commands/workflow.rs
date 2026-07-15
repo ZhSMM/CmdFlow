@@ -305,17 +305,32 @@ pub async fn run_workflow(
     let registry = state.execution_registry.clone();
     let cancel = registry.register(execution_id.clone()).await;
 
-    // 3. 写 executions 表
+    // 3. 写 executions 表 (Phase 10: 同时存工作流节点摘要到 rendered_template, 历史里能展示)
     {
         let conn = state.db.get()?;
+        // 统计节点类型: 4 nodes (script, http, delay, condition)
+        let mut type_counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for n in &detail.nodes {
+            *type_counts.entry(n.node_type.clone()).or_insert(0) += 1;
+        }
+        let types_str: Vec<String> = type_counts
+            .iter()
+            .map(|(t, c)| if *c > 1 { format!("{t}×{c}") } else { t.clone() })
+            .collect();
+        let summary = format!(
+            "工作流 ({} 节点: {})",
+            detail.nodes.len(),
+            types_str.join(", ")
+        );
         conn.execute(
-            "INSERT INTO executions (id, workflow_id, trigger, status, started_at, input_params)
-             VALUES (?1, ?2, 'manual', 'running', ?3, ?4)",
+            "INSERT INTO executions (id, workflow_id, trigger, status, started_at, input_params, rendered_template)
+             VALUES (?1, ?2, 'manual', 'running', ?3, ?4, ?5)",
             rusqlite::params![
                 execution_id,
                 input.workflow_id,
                 chrono::Utc::now().timestamp(),
                 serde_json::to_string(&input.params).ok(),
+                summary,
             ],
         )?;
     }

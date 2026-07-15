@@ -66,6 +66,13 @@ export function ReactFlowLazy(props: ReactFlowLazyProps) {
       onPaneClick={props.onPaneClick}
       nodesDraggable={props.nodesDraggable ?? true}
       elementsSelectable={props.elementsSelectable ?? true}
+      // 关键: 把 pane 平移限制到中键/右键 (0=左 1=中 2=右),
+      // 否则左键拖动空地会被当成平移, 节点拖动会被干扰
+      panOnDrag={[1, 2]}
+      // 左键拖动空地改成框选
+      selectionOnDrag
+      // 拖动节点时同时选中
+      selectNodesOnDrag
       fitView
       deleteKeyCode={["Delete", "Backspace"]}
     >
