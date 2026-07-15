@@ -7,6 +7,10 @@ import type {
   EdgeChange,
   ReactFlowProps,
 } from "reactflow";
+// CSS 静态 import: vite 会把它注入 <link> 标签, 避免动态 import 在 dev mode
+// 下不生效 (症状: minimap 显示成三条横线、节点 cursor 不会变 grab)
+// reactflow 体积大, 但 CSS 不大, 静态 import 没问题
+import "reactflow/dist/style.css";
 
 interface ReactFlowLazyProps {
   nodes: Node[];
@@ -25,17 +29,15 @@ interface ReactFlowLazyProps {
 
 /**
  * ReactFlow 的懒加载包装
- * reactflow 体积大 (~170KB),只在进入工作流编辑时才加载。
+ * reactflow JS 体积大 (~170KB),只在进入工作流编辑时才加载。
+ * CSS 必须静态 import, 否则 dev mode 下样式可能丢失。
  */
 export function ReactFlowLazy(props: ReactFlowLazyProps) {
   const [mod, setMod] = useState<typeof import("reactflow") | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      import("reactflow"),
-      import("reactflow/dist/style.css"),
-    ]).then(([m]) => {
+    import("reactflow").then((m) => {
       if (!cancelled) setMod(m);
     });
     return () => {
