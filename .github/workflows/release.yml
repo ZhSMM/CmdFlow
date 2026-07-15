@@ -70,7 +70,8 @@ jobs:
         uses: Swatinem/rust-cache@v1
         with:
           cache-on-failure: true
-          workspaces: src-tauri -> target
+          working-directory: src-tauri
+          target-dir: target
 
       # ===== 平台特定依赖 =====
       - name: Install Linux deps
