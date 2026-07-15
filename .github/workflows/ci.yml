@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
 
       - name: Install dependencies
@@ -56,19 +56,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry & build
-        uses: actions/swift-cache@v1
+        uses: Swatinem/rust-cache@v1
         with:
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-
-      - name: Cache sccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/sccache
-          key: ${{ runner.os }}-sccache-${{ hashFiles('src-tauri/Cargo.lock') }}
+          cache-on-failure: true
+          workspaces: src-tauri -> target
 
       - name: Install Linux deps (webkit2gtk)
         run: |

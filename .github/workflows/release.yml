@@ -58,7 +58,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
 
       - name: Install Rust
@@ -67,13 +67,10 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache cargo
-        uses: actions/swift-cache@v1
+        uses: Swatinem/rust-cache@v1
         with:
-          key: ${{ matrix.target }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
+          cache-on-failure: true
+          workspaces: src-tauri -> target
 
       # ===== 平台特定依赖 =====
       - name: Install Linux deps

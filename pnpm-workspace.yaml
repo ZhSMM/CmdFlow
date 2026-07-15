@@ -1,3 +1,6 @@
+# pnpm 11+ 配置
+# packages 字段必须存在(即使空),否则 pnpm 9+ 会拒绝运行
+packages: []
 allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
