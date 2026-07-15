@@ -15,6 +15,16 @@ use crate::storage::migrations;
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type DbConn = r2d2::PooledConnection<SqliteConnectionManager>;
 
+/// 打开一个临时文件数据库 (用于测试)
+/// 用 tempfile 给每个测试一个独立的 db 文件,避免 r2d2 内存 DB 共享问题
+pub fn open_pool_memory() -> AppResult<DbPool> {
+    use std::env;
+    let mut tmp = env::temp_dir();
+    tmp.push(format!("cmdflow_test_{}.db", uuid::Uuid::new_v4()));
+    let _ = std::fs::remove_file(&tmp);
+    open_pool(&tmp)
+}
+
 /// 打开一个 SQLite 连接池
 pub fn open_pool(path: &Path) -> AppResult<DbPool> {
     let manager = SqliteConnectionManager::file(path)

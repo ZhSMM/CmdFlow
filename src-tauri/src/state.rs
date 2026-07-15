@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager};
 use crate::core::executor::ExecutionRegistry;
 use crate::error::{AppError, AppResult};
 use crate::storage::db::{self, DbPool};
+use crate::storage::seed;
 
 pub struct AppState {
     pub db: Arc<DbPool>,
@@ -27,9 +28,13 @@ impl AppState {
 
         let pool = db::open_pool(&db_path)?;
         db::run_migrations(&pool)?;
+        let pool_arc = Arc::new(pool);
+
+        // 首次启动注入种子命令 (Phase 10, 修 favorites 找不到表)
+        seed::maybe_seed(&pool_arc);
 
         Ok(Self {
-            db: Arc::new(pool),
+            db: pool_arc,
             started_at: chrono::Utc::now(),
             execution_registry: Arc::new(ExecutionRegistry::new()),
         })

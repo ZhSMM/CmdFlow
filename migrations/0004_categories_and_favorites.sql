@@ -15,7 +15,7 @@ CREATE INDEX idx_categories_parent ON categories(parent_id);
 
 -- 命令可以归类（NULL = 根目录）
 ALTER TABLE commands ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL;
-CREATE INDEX idx_commands_category ON commands(category_id);
+CREATE INDEX idx_commands_category_id ON commands(category_id);
 
 -- 收藏（用户置顶的常用命令）
 CREATE TABLE favorites (
