@@ -1,25 +1,36 @@
-# CmdFlow v0.2.1
+# CmdFlow v0.2.3
 
-## 修复 (v0.2.1)
+## 修复 (v0.2.3)
 
-- **启动器快捷键改回 Ctrl+Alt+P** — 原 `Cmd+Shift+Space` 在 Windows 上跟 Windows Search / 某些中文输入法冲突，OS 直接拒绝注册。改成 `Ctrl+Alt+P` (P for Palette)，通用且几乎不冲突
-- **CI 收紧** — clippy 门禁从 warn 升级为 `deny warnings`，再有任何 warning 都进不来 main
-- **clippy 全清** — 33 个历史 warning 全部清理：删除未用 import/变量、消除 dead code、while-let 化、merge match 简化、折叠可合并的 if let 等
+- **macOS 透明窗口支持** — `WebviewWindowBuilder::transparent` 在 macOS 上是私有 API，
+  Tauri 2 默认不暴露。开启 `macos-private-api` feature + `app.macOSPrivateApi: true` 后，
+  启动器独立窗口在 macOS 上也能正常透明渲染。Windows / Linux 行为不变。
 
-## v0.2.0 回顾
+## 修复 (v0.2.2)
 
-Phase 8 + Phase 9 重大更新：插件体系、工作流、模板市场、多窗口、AI 流式。
+> v0.2.2 的 release 因 macOS 编译失败被撤回, 实际修复已合并到 v0.2.3.
+
+- **补迁移 0004** — `categories` / `favorites` 表的迁移文件之前没注册到 `MIGRATIONS`
+  数组, 旧数据库升级到 v0.2.x 时会报 `no such table: favorites`. 现在纳入迁移链路.
+- **首次启动种子数据** — 新建空库时自动注入 4 个分类 + 7 个常用命令 (echo / ls / ping /
+  读文件 / HTTP GET / Git 状态 / AI 问答) + 2 个示例工作流 (每日备份 / HTTP 健康检查),
+  避免用户打开应用面对空库.
+- **索引重命名** — `idx_commands_category` 在 0001 和 0004 各定义过一次 (列不同),
+  改名为 `idx_commands_category_id` 避免冲突.
+- **共享内存连接改用临时文件** — `open_pool_memory` 切换到 temp file 模式,
+  规避 r2d2 在某些 Linux 平台上 `shared memory` 不可用的问题.
 
 ## 新增 (Phase 9)
 
 - **拖拽改分类** — dnd-kit 替换原下拉选择, 命令卡片可拖到任意分类
-- **节点模板市场** — 6 个内置工作流 (git-deploy / docker-build / log-cleanup / http-data-pipeline / daily-backup / http-healthcheck) 一键导入
+- **节点模板市场** — 6 个内置工作流 (git-deploy / docker-build / log-cleanup /
+  http-data-pipeline / daily-backup / http-healthcheck) 一键导入
 - **WASM 插件** — wasmtime 24.x 嵌入, .wasm 插件可独立执行 (合约: alloc/dealloc/run)
 - **多窗口启动器** — Ctrl+Alt+P 拉独立窗口 (透明 + 置顶 + 无边框), popup 模式保留为 fallback
 - **AI 流式输出** — SSE 逐 token 推送, UI 可做 typewriter
 - **AI 工具调用** — OpenAI 格式 tools, 工具名映射命令库, 自动执行 + 反馈 LLM
 
-## Phase 8 (本版本并入)
+## Phase 8 (并入)
 
 - **JS 插件运行时** — Boa engine 0.20 (pure Rust), 沙箱执行 + 5s 超时
 - **树形 LibraryPage** — 多级分类, 收藏侧栏
@@ -37,6 +48,7 @@ Phase 8 + Phase 9 重大更新：插件体系、工作流、模板市场、多�
 ## 安装
 
 下载对应版本：
+
 - **MSI** (推荐): Windows Installer
 - **EXE** (NSIS): 单文件安装器
 - **.deb / .AppImage** (Linux)
@@ -46,7 +58,7 @@ Phase 8 + Phase 9 重大更新：插件体系、工作流、模板市场、多�
 
 ## 技术栈
 
-Tauri 2 · Rust · React 18 · TypeScript · SQLite · ReactFlow · xterm.js
+Tauri 2 · Rust · React 18 · TypeScript · SQLite · ReactFlow · xterm.js · dnd-kit
 
 ## 文档
 
@@ -56,4 +68,4 @@ Tauri 2 · Rust · React 18 · TypeScript · SQLite · ReactFlow · xterm.js
 
 ## 测试
 
-14/14 单元测试通过 (interpolation / blacklist / scheduler)
+35/35 单元测试通过 (base 18 / templates 3 / wasm 2 / ai 6 / seed 6)
