@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   History as HistoryIcon, RefreshCw, CheckCircle2, XCircle, Loader2,
   Calendar, Clock, AlertCircle, Play, Search, X,
-  Trash2, BarChart3, SearchX, Database,
+  Trash2, BarChart3, SearchX, Database, Terminal,
 } from "lucide-react";
 import {
   api, type HistorySummary, type HistoryDetail, type HistoryStats, type ClearHistoryInput,
@@ -268,7 +268,7 @@ export function HistoryPage() {
             setActiveNodeRun(null);
           }
         }}
-        title="执行详情"
+        title={detail.data ? `执行详情: ${detail.data.workflow_name}` : "执行详情"}
         className="max-w-4xl"
       >
         {detail.isLoading && <div className="text-sm text-muted-foreground">加载中...</div>}
@@ -328,14 +328,38 @@ function HistoryCard({
   onDelete: () => void;
   isReplaying: boolean;
 }) {
+  // 紧凑展示参数
+  const paramsSummary = formatParamsSummary(h.input_params);
+  const hasCommand = !!h.rendered_template;
   return (
     <Card className="group cursor-pointer hover:bg-accent/30" onClick={onView}>
       <CardContent className="flex items-center justify-between gap-3 p-3">
         <div className="flex min-w-0 items-center gap-3">
           <StatusIcon status={h.status} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{h.workflow_name}</div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="truncate text-sm font-medium">{h.workflow_name}</div>
+              {hasCommand && (
+                <Badge variant="secondary" className="shrink-0 text-[10px]">
+                  命令
+                </Badge>
+              )}
+            </div>
+            {/* 渲染后的命令模板 (单命令运行时) */}
+            {hasCommand && (
+              <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                <Terminal className="h-3 w-3 shrink-0" />
+                <code className="truncate font-mono">{h.rendered_template}</code>
+              </div>
+            )}
+            {/* 输入参数摘要 */}
+            {paramsSummary && (
+              <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                <span className="shrink-0">参数:</span>
+                <code className="truncate font-mono">{paramsSummary}</code>
+              </div>
+            )}
+            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
                 {formatDate(h.started_at)}
@@ -399,6 +423,21 @@ function HistoryCard({
       </CardContent>
     </Card>
   );
+}
+
+/** 把 input_params 压缩成一行短串, 太长就截断 */
+function formatParamsSummary(params: unknown): string | null {
+  if (params == null) return null;
+  if (typeof params === "string") return params.length > 80 ? params.slice(0, 80) + "…" : params;
+  if (typeof params !== "object") return String(params);
+  const entries = Object.entries(params as Record<string, unknown>);
+  if (entries.length === 0) return null;
+  const parts = entries.map(([k, v]) => {
+    const vs = typeof v === "string" ? v : JSON.stringify(v);
+    return `${k}=${vs.length > 30 ? vs.slice(0, 30) + "…" : vs}`;
+  });
+  const joined = parts.join(", ");
+  return joined.length > 100 ? joined.slice(0, 100) + "…" : joined;
 }
 
 function StatsCards({ stats }: { stats: HistoryStats }) {
@@ -476,9 +515,31 @@ function HistoryDetailView({
   onSelectNodeRun: (id: string | null) => void;
 }) {
   const active = detail.node_runs.find((n) => n.id === activeNodeRun) || detail.node_runs[0];
+  const hasParams = detail.input_params != null && typeof detail.input_params === "object" &&
+    Object.keys(detail.input_params as object).length > 0;
 
   return (
-    <div className="grid grid-cols-3 gap-3 text-xs">
+    <div className="space-y-3 text-xs">
+      {/* 顶部:命令 + 参数 */}
+      {detail.rendered_template && (
+        <div>
+          <div className="mb-1 text-xs font-medium">命令</div>
+          <pre className="overflow-auto rounded bg-slate-900 p-2 font-mono text-[10px] text-slate-100 max-h-24">
+            {detail.rendered_template}
+          </pre>
+        </div>
+      )}
+      {hasParams && (
+        <div>
+          <div className="mb-1 text-xs font-medium">参数</div>
+          <pre className="overflow-auto rounded bg-slate-900 p-2 font-mono text-[10px] text-slate-100 max-h-24">
+            {JSON.stringify(detail.input_params, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {/* 节点列表 + 详情 */}
+      <div className="grid grid-cols-3 gap-3">
       {/* 左侧:节点列表 */}
       <div className="col-span-1 space-y-1">
         <div className="mb-1 font-medium">节点 ({detail.node_runs.length})</div>
@@ -565,6 +626,7 @@ function HistoryDetailView({
         ) : (
           <div className="text-muted-foreground">选择一个节点查看详情</div>
         )}
+      </div>
       </div>
     </div>
   );

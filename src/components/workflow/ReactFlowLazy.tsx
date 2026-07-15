@@ -17,6 +17,10 @@ interface ReactFlowLazyProps {
   onNodeClick: ReactFlowProps["onNodeClick"];
   onEdgeClick: ReactFlowProps["onEdgeClick"];
   onPaneClick: () => void;
+  /** 显式启用节点拖动 (ReactFlow 11 默认 true, 但作为防御性配置) */
+  nodesDraggable?: boolean;
+  /** 显式启用节点选中 */
+  elementsSelectable?: boolean;
 }
 
 /**
@@ -60,6 +64,8 @@ export function ReactFlowLazy(props: ReactFlowLazyProps) {
       onNodeClick={props.onNodeClick}
       onEdgeClick={props.onEdgeClick}
       onPaneClick={props.onPaneClick}
+      nodesDraggable={props.nodesDraggable ?? true}
+      elementsSelectable={props.elementsSelectable ?? true}
       fitView
       deleteKeyCode={["Delete", "Backspace"]}
     >

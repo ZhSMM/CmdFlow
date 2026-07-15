@@ -285,6 +285,10 @@ export interface HistorySummary {
   finished_at: number | null;
   duration_ms: number | null;
   error: string | null;
+  /** 执行的参数 (Phase 10 加入, 卡片直接显示) */
+  input_params: unknown;
+  /** 渲染后的命令模板 (直接命令运行有值) */
+  rendered_template: string | null;
 }
 
 export interface NodeRunInfo {

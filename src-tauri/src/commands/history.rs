@@ -17,6 +17,35 @@ pub struct HistorySummary {
     pub finished_at: Option<i64>,
     pub duration_ms: Option<i64>,
     pub error: Option<String>,
+    /// 执行的命令/工作流参数 (供卡片直接显示)
+    pub input_params: Option<serde_json::Value>,
+    /// 渲染后的命令模板 (Phase 8+ 用, 直接命令运行有值)
+    pub rendered_template: Option<String>,
+}
+
+/// 从行构造 HistorySummary (供 list/search/detail 共用)
+///
+/// 列顺序 (与 SELECT 一致):
+///   0 id, 1 workflow_id, 2 workflow_name,
+///   3 trigger, 4 status,
+///   5 started_at, 6 finished_at, 7 duration_ms, 8 error,
+///   9 input_params, 10 rendered_template
+fn build_summary_from_row(r: &rusqlite::Row) -> rusqlite::Result<HistorySummary> {
+    let input_params_str: Option<String> = r.get(9)?;
+    let input_params = input_params_str.and_then(|s| serde_json::from_str(&s).ok());
+    Ok(HistorySummary {
+        id: r.get(0)?,
+        workflow_id: r.get(1)?,
+        workflow_name: r.get(2)?,
+        trigger: r.get(3)?,
+        status: r.get(4)?,
+        started_at: r.get(5)?,
+        finished_at: r.get(6)?,
+        duration_ms: r.get(7)?,
+        error: r.get(8)?,
+        input_params,
+        rendered_template: r.get(10)?,
+    })
 }
 
 #[derive(Serialize)]
@@ -59,7 +88,8 @@ pub async fn list_history(
         "SELECT e.id, e.workflow_id,
                 COALESCE(c.name, w.name, '?') as workflow_name,
                 e.trigger, e.status,
-                e.started_at, e.finished_at, e.duration_ms, e.error
+                e.started_at, e.finished_at, e.duration_ms, e.error,
+                e.input_params, e.rendered_template
          FROM executions e
          LEFT JOIN workflows w ON w.id = e.workflow_id
          LEFT JOIN commands  c ON c.id = e.workflow_id
@@ -79,17 +109,7 @@ pub async fn list_history(
     let arg_refs: Vec<&dyn rusqlite::ToSql> = args.iter().map(|a| a.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(&*arg_refs, |r| {
-        Ok(HistorySummary {
-            id: r.get(0)?,
-            workflow_id: r.get(1)?,
-            workflow_name: r.get(2)?,
-            trigger: r.get(3)?,
-            status: r.get(4)?,
-            started_at: r.get(5)?,
-            finished_at: r.get(6)?,
-            duration_ms: r.get(7)?,
-            error: r.get(8)?,
-        })
+        Ok(build_summary_from_row(r)?)
     })?;
     let mut out = Vec::new();
     for r in rows {
@@ -110,25 +130,14 @@ pub async fn get_history_detail(
             "SELECT e.id, e.workflow_id,
                 COALESCE(c.name, w.name, '?') as workflow_name,
                 e.trigger, e.status,
-                e.started_at, e.finished_at, e.duration_ms, e.error
+                e.started_at, e.finished_at, e.duration_ms, e.error,
+                e.input_params, e.rendered_template
          FROM executions e
          LEFT JOIN workflows w ON w.id = e.workflow_id
          LEFT JOIN commands  c ON c.id = e.workflow_id
          WHERE e.id = ?1",
             [&id],
-            |r| {
-                Ok(HistorySummary {
-                    id: r.get(0)?,
-                    workflow_id: r.get(1)?,
-                    workflow_name: r.get(2)?,
-                    trigger: r.get(3)?,
-                    status: r.get(4)?,
-                    started_at: r.get(5)?,
-                    finished_at: r.get(6)?,
-                    duration_ms: r.get(7)?,
-                    error: r.get(8)?,
-                })
-            },
+            |r| build_summary_from_row(r),
         )
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("execution:{id}")),
@@ -463,7 +472,8 @@ pub async fn search_history(
         "SELECT e.id, e.workflow_id,
                 COALESCE(c.name, w.name, '?') as workflow_name,
                 e.trigger, e.status,
-                e.started_at, e.finished_at, e.duration_ms, e.error
+                e.started_at, e.finished_at, e.duration_ms, e.error,
+                e.input_params, e.rendered_template
          FROM executions e
          LEFT JOIN workflows w ON w.id = e.workflow_id
          LEFT JOIN commands  c ON c.id = e.workflow_id
@@ -475,17 +485,7 @@ pub async fn search_history(
          LIMIT ?2",
     )?;
     let rows = stmt.query_map(rusqlite::params![pat, limit], |r| {
-        Ok(HistorySummary {
-            id: r.get(0)?,
-            workflow_id: r.get(1)?,
-            workflow_name: r.get(2)?,
-            trigger: r.get(3)?,
-            status: r.get(4)?,
-            started_at: r.get(5)?,
-            finished_at: r.get(6)?,
-            duration_ms: r.get(7)?,
-            error: r.get(8)?,
-        })
+        Ok(build_summary_from_row(r)?)
     })?;
     let mut out = Vec::new();
     for r in rows {

@@ -273,12 +273,12 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   }, [executionId]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0">
       {/* 左侧:节点面板 */}
       <NodePanel nodeTypes={nodeTypes.data || []} />
 
       {/* 中间:画布 */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 min-w-0 flex-col min-h-0">
         <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
           <span className="text-sm font-medium">{detail.data?.name || "加载中..."}</span>
           {dirty && <span className="text-xs text-amber-500">未保存</span>}
@@ -347,13 +347,15 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
           )}
         </div>
 
-        <div className="flex-1" onDrop={onDrop} onDragOver={onDragOver}>
+        <div className="relative flex-1 min-h-0" onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlowLazy
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            nodesDraggable
+            elementsSelectable
             onNodeClick={(_, n) => {
               setSelectedNode(n);
               setSelectedEdge(null);
