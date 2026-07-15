@@ -24,10 +24,18 @@ pub struct CmdNode;
 
 #[async_trait]
 impl Node for CmdNode {
-    fn type_id(&self) -> &'static str { "cmd" }
-    fn display_name(&self) -> &'static str { "命令" }
-    fn category(&self) -> &'static str { "core" }
-    fn description(&self) -> &'static str { "执行一个已注册的命令" }
+    fn type_id(&self) -> &'static str {
+        "cmd"
+    }
+    fn display_name(&self) -> &'static str {
+        "命令"
+    }
+    fn category(&self) -> &'static str {
+        "core"
+    }
+    fn description(&self) -> &'static str {
+        "执行一个已注册的命令"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -51,7 +59,11 @@ impl Node for CmdNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: CmdConfig = serde_json::from_value(config.clone())
             .map_err(|e| crate::error::AppError::invalid(format!("cmd config 解析失败: {e}")))?;
 
@@ -59,9 +71,15 @@ impl Node for CmdNode {
         let interp = build_interp(&ctx);
         let cfg_cmd_ref = render_config(&Value::String(cfg.command_ref.clone()), &interp)?;
         let cfg_cwd = if let Some(c) = &cfg.cwd {
-            Some(render_config(&Value::String(c.clone()), &interp)?
-                .as_str().map(String::from).unwrap_or_default())
-        } else { None };
+            Some(
+                render_config(&Value::String(c.clone()), &interp)?
+                    .as_str()
+                    .map(String::from)
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        };
         let cfg_env = render_config(&cfg.env, &interp)?;
         let cfg_params = render_config(&cfg.param_overrides, &interp)?;
 
@@ -72,7 +90,8 @@ impl Node for CmdNode {
             .ok_or_else(|| crate::error::AppError::not_found(format!("command:{command_id}")))?;
 
         // 合并参数: command 默认 + overrides
-        let mut merged_params: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut merged_params: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         for p in &command.params {
             if let Some(dv) = &p.default_value {
                 merged_params.insert(p.name.clone(), json_to_string(dv));
@@ -85,7 +104,8 @@ impl Node for CmdNode {
         }
 
         // 合并参数: command 默认 + overrides
-        let mut merged_params: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut merged_params: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         for p in &command.params {
             if let Some(dv) = &p.default_value {
                 merged_params.insert(p.name.clone(), json_to_string(dv));
@@ -130,8 +150,9 @@ impl Node for CmdNode {
             cmd.creation_flags(FLAGS);
         }
 
-        let mut child = cmd.spawn().map_err(|e|
-            crate::error::AppError::other(format!("启动子进程失败: {e}")))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| crate::error::AppError::other(format!("启动子进程失败: {e}")))?;
 
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
@@ -218,7 +239,9 @@ impl Node for CmdNode {
                     status,
                     error: if code != Some(0) {
                         Some(format!("退出码: {:?}", code))
-                    } else { None },
+                    } else {
+                        None
+                    },
                     ..Default::default()
                 })
             }
@@ -244,16 +267,25 @@ impl Node for CmdNode {
     }
 }
 
-fn build_command(command_type: &crate::storage::models::CommandType, template: &str) -> (String, Vec<String>) {
+fn build_command(
+    command_type: &crate::storage::models::CommandType,
+    template: &str,
+) -> (String, Vec<String>) {
     use crate::storage::models::CommandType;
     match command_type {
         CommandType::Cmd => ("cmd".into(), vec!["/c".into(), template.into()]),
         CommandType::Pwsh => {
             // 同样走探测逻辑，pwsh 优先，没有就降级
             let bin = crate::core::executor::powershell_bin();
-            (bin.into(), vec!["-NoProfile".into(), "-Command".into(), template.into()])
+            (
+                bin.into(),
+                vec!["-NoProfile".into(), "-Command".into(), template.into()],
+            )
         }
-        CommandType::PowerShell => ("powershell".into(), vec!["-NoProfile".into(), "-Command".into(), template.into()]),
+        CommandType::PowerShell => (
+            "powershell".into(),
+            vec!["-NoProfile".into(), "-Command".into(), template.into()],
+        ),
         CommandType::Python => ("python".into(), vec!["-c".into(), template.into()]),
         CommandType::Node => ("node".into(), vec!["-e".into(), template.into()]),
         CommandType::Bash => ("bash".into(), vec!["-c".into(), template.into()]),
@@ -261,26 +293,37 @@ fn build_command(command_type: &crate::storage::models::CommandType, template: &
     }
 }
 
-async fn resolve_command_id(ctx: &NodeContext, name_or_id: &str) -> crate::error::AppResult<String> {
+async fn resolve_command_id(
+    ctx: &NodeContext,
+    name_or_id: &str,
+) -> crate::error::AppResult<String> {
     let conn = ctx.db.get()?;
 
     // 先按 ID 试
-    let by_id: Option<String> = conn.query_row(
-        "SELECT id FROM commands WHERE id = ?1",
-        [name_or_id],
-        |r| r.get(0),
-    ).ok();
-    if let Some(id) = by_id { return Ok(id); }
+    let by_id: Option<String> = conn
+        .query_row("SELECT id FROM commands WHERE id = ?1", [name_or_id], |r| {
+            r.get(0)
+        })
+        .ok();
+    if let Some(id) = by_id {
+        return Ok(id);
+    }
 
     // 再按 name 试
-    let by_name: Option<String> = conn.query_row(
-        "SELECT id FROM commands WHERE name = ?1",
-        [name_or_id],
-        |r| r.get(0),
-    ).ok();
-    if let Some(id) = by_name { return Ok(id); }
+    let by_name: Option<String> = conn
+        .query_row(
+            "SELECT id FROM commands WHERE name = ?1",
+            [name_or_id],
+            |r| r.get(0),
+        )
+        .ok();
+    if let Some(id) = by_name {
+        return Ok(id);
+    }
 
-    Err(crate::error::AppError::not_found(format!("command: {name_or_id}")))
+    Err(crate::error::AppError::not_found(format!(
+        "command: {name_or_id}"
+    )))
 }
 
 fn json_to_string(v: &Value) -> String {

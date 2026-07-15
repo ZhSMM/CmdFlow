@@ -42,7 +42,10 @@ impl Serialize for AppError {
     {
         let mut s = serde_json::Map::new();
         s.insert("kind".into(), serde_json::Value::String(self.kind().into()));
-        s.insert("message".into(), serde_json::Value::String(self.to_string()));
+        s.insert(
+            "message".into(),
+            serde_json::Value::String(self.to_string()),
+        );
         serde_json::Value::Object(s).serialize(serializer)
     }
 }

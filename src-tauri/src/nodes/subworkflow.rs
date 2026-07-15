@@ -20,10 +20,18 @@ pub struct SubWorkflowNode;
 
 #[async_trait]
 impl Node for SubWorkflowNode {
-    fn type_id(&self) -> &'static str { "subworkflow" }
-    fn display_name(&self) -> &'static str { "子工作流" }
-    fn category(&self) -> &'static str { "control" }
-    fn description(&self) -> &'static str { "嵌套调用另一个工作流" }
+    fn type_id(&self) -> &'static str {
+        "subworkflow"
+    }
+    fn display_name(&self) -> &'static str {
+        "子工作流"
+    }
+    fn category(&self) -> &'static str {
+        "control"
+    }
+    fn description(&self) -> &'static str {
+        "嵌套调用另一个工作流"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -40,9 +48,14 @@ impl Node for SubWorkflowNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
-        let cfg: SubWorkflowConfig = serde_json::from_value(config)
-            .map_err(|e| crate::error::AppError::invalid(format!("subworkflow config 解析失败: {e}")))?;
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
+        let cfg: SubWorkflowConfig = serde_json::from_value(config).map_err(|e| {
+            crate::error::AppError::invalid(format!("subworkflow config 解析失败: {e}"))
+        })?;
 
         // 解析 workflow_ref
         let detail = crate::storage::models::WorkflowDetail::load_full(&ctx.db, &cfg.workflow_ref)?
@@ -50,7 +63,9 @@ impl Node for SubWorkflowNode {
                 // 尝试按名称解析
                 None
             })
-            .ok_or_else(|| crate::error::AppError::not_found(format!("workflow: {}", cfg.workflow_ref)))?;
+            .ok_or_else(|| {
+                crate::error::AppError::not_found(format!("workflow: {}", cfg.workflow_ref))
+            })?;
 
         if !detail.workflow.enabled {
             return Ok(NodeOutput::failed("子工作流已禁用".to_string()));
@@ -65,9 +80,13 @@ impl Node for SubWorkflowNode {
         }
         let _ = HashMap::<String, String>::new(); // 抑制未用
 
-        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+        crate::nodes::node::stream_event(
+            &ctx.app,
+            &ctx.execution_id,
+            &ctx.node_id,
             crate::core::events::StreamKind::System,
-            format!("🔗 子工作流: {}\n", detail.workflow.name));
+            format!("🔗 子工作流: {}\n", detail.workflow.name),
+        );
 
         // Phase 4 简化: 同步等待子工作流完成
         // TODO: 真实场景应该异步、复用 execution_id 体系
@@ -99,7 +118,9 @@ impl Node for SubWorkflowNode {
             status: res.status,
             error: if matches!(res.status, NodeStatus::Failed) {
                 Some("子工作流失败".into())
-            } else { None },
+            } else {
+                None
+            },
             ..Default::default()
         })
     }

@@ -56,18 +56,32 @@ struct AiConfig {
     max_tool_iterations: usize,
 }
 
-fn default_temp() -> f32 { 0.7 }
-fn default_stream() -> bool { true }
-fn default_max_iter() -> usize { 5 }
+fn default_temp() -> f32 {
+    0.7
+}
+fn default_stream() -> bool {
+    true
+}
+fn default_max_iter() -> usize {
+    5
+}
 
 pub struct AiNode;
 
 #[async_trait]
 impl Node for AiNode {
-    fn type_id(&self) -> &'static str { "ai" }
-    fn display_name(&self) -> &'static str { "AI" }
-    fn category(&self) -> &'static str { "io" }
-    fn description(&self) -> &'static str { "调用大模型 (流式 + 工具调用)" }
+    fn type_id(&self) -> &'static str {
+        "ai"
+    }
+    fn display_name(&self) -> &'static str {
+        "AI"
+    }
+    fn category(&self) -> &'static str {
+        "io"
+    }
+    fn description(&self) -> &'static str {
+        "调用大模型 (流式 + 工具调用)"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -94,7 +108,11 @@ impl Node for AiNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: AiConfig = serde_json::from_value(config)
             .map_err(|e| crate::error::AppError::invalid(format!("ai config 解析失败: {e}")))?;
 
@@ -106,24 +124,34 @@ impl Node for AiNode {
             std::env::var("OPENAI_API_KEY").unwrap_or_default()
         };
 
-        let base_url = cfg.base_url.clone().unwrap_or_else(|| {
-            match cfg.provider.as_str() {
+        let base_url = cfg
+            .base_url
+            .clone()
+            .unwrap_or_else(|| match cfg.provider.as_str() {
                 "openai" => "https://api.openai.com/v1".to_string(),
                 "ollama" => "http://localhost:11434/v1".to_string(),
                 "anthropic" => "https://api.anthropic.com/v1".to_string(),
                 _ => "https://api.openai.com/v1".to_string(),
-            }
-        });
+            });
 
         let client = Client::builder()
             .timeout(Duration::from_millis(cfg.timeout_ms.unwrap_or(120_000)))
             .build()
             .map_err(|e| crate::error::AppError::other(format!("http client: {e}")))?;
 
-        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+        crate::nodes::node::stream_event(
+            &ctx.app,
+            &ctx.execution_id,
+            &ctx.node_id,
             crate::core::events::StreamKind::System,
-            format!("🤖 调用 {}/{} (stream={}, tools={})\n",
-                cfg.provider, cfg.model, cfg.stream, cfg.tools.len()));
+            format!(
+                "🤖 调用 {}/{} (stream={}, tools={})\n",
+                cfg.provider,
+                cfg.model,
+                cfg.stream,
+                cfg.tools.len()
+            ),
+        );
 
         // messages 数组 (支持工具调用循环,会原地追加)
         let mut messages = build_messages(cfg.system.as_deref(), &prompt);
@@ -131,9 +159,16 @@ impl Node for AiNode {
         // 1. 第一次请求
         let mut full_content = String::new();
         let mut tool_calls = match make_request(
-            &ctx, &client, &base_url, &api_key, &cfg, &messages,
+            &ctx,
+            &client,
+            &base_url,
+            &api_key,
+            &cfg,
+            &messages,
             &mut full_content,
-        ).await {
+        )
+        .await
+        {
             Ok(t) => t,
             Err(out) => return Ok(out),
         };
@@ -142,9 +177,13 @@ impl Node for AiNode {
         let mut iter = 0;
         while !tool_calls.is_empty() && iter < cfg.max_tool_iterations {
             iter += 1;
-            crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+            crate::nodes::node::stream_event(
+                &ctx.app,
+                &ctx.execution_id,
+                &ctx.node_id,
                 crate::core::events::StreamKind::System,
-                format!("🔧 第 {} 轮工具调用 ({} 个)\n", iter, tool_calls.len()));
+                format!("🔧 第 {} 轮工具调用 ({} 个)\n", iter, tool_calls.len()),
+            );
 
             // 把 assistant 的 tool_calls 消息加回 messages
             let assistant_msg = json!({
@@ -167,17 +206,25 @@ impl Node for AiNode {
                 let args_str = &tc.function_args;
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
-                crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+                crate::nodes::node::stream_event(
+                    &ctx.app,
+                    &ctx.execution_id,
+                    &ctx.node_id,
                     crate::core::events::StreamKind::System,
-                    format!("  → {}({})\n", tool_name, args_str));
+                    format!("  → {}({})\n", tool_name, args_str),
+                );
 
                 // 在命令库中查 tool_name 并执行
                 let tool_result = match lookup_and_run_command(&ctx, tool_name, &args).await {
                     Ok(s) => s,
                     Err(e) => {
-                        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+                        crate::nodes::node::stream_event(
+                            &ctx.app,
+                            &ctx.execution_id,
+                            &ctx.node_id,
                             crate::core::events::StreamKind::Stderr,
-                            format!("工具执行失败: {e}\n"));
+                            format!("工具执行失败: {e}\n"),
+                        );
                         format!("error: {e}")
                     }
                 };
@@ -193,14 +240,21 @@ impl Node for AiNode {
             // 再发请求 (后续请求统一用非流式,简化逻辑)
             let follow_up = match follow_up_request(
                 &ctx, &client, &base_url, &api_key, &cfg, &messages,
-            ).await {
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(out) => return Ok(out),
             };
             full_content.push_str(&follow_up.content);
             if !follow_up.content.is_empty() {
-                crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
-                    crate::core::events::StreamKind::Stdout, follow_up.content.clone());
+                crate::nodes::node::stream_event(
+                    &ctx.app,
+                    &ctx.execution_id,
+                    &ctx.node_id,
+                    crate::core::events::StreamKind::Stdout,
+                    follow_up.content.clone(),
+                );
             }
             tool_calls = follow_up.tool_calls;
         }
@@ -227,7 +281,11 @@ struct ToolCall {
 }
 
 /// 在命令库中按名称查命令并执行 (工具调用)
-async fn lookup_and_run_command(ctx: &NodeContext, tool_name: &str, args: &Value) -> Result<String, String> {
+async fn lookup_and_run_command(
+    ctx: &NodeContext,
+    tool_name: &str,
+    args: &Value,
+) -> Result<String, String> {
     use rusqlite::OptionalExtension;
 
     let conn = ctx.db.get().map_err(|e| format!("DB: {e}"))?;
@@ -267,7 +325,9 @@ async fn lookup_and_run_command(ctx: &NodeContext, tool_name: &str, args: &Value
         ctx.db.clone(),
         registry,
         input,
-    ).await {
+    )
+    .await
+    {
         Ok(resp) => Ok(resp.stdout),
         Err(e) => Err(format!("命令执行失败: {e}")),
     }
@@ -302,7 +362,10 @@ fn build_messages(system: Option<&str>, user: &str) -> Value {
 }
 
 fn extract_content(v: &Value, _provider: &str) -> Option<String> {
-    if let Some(s) = v.pointer("/choices/0/message/content").and_then(|x| x.as_str()) {
+    if let Some(s) = v
+        .pointer("/choices/0/message/content")
+        .and_then(|x| x.as_str())
+    {
         return Some(s.to_string());
     }
     if let Some(s) = v.pointer("/message/content").and_then(|x| x.as_str()) {
@@ -312,15 +375,36 @@ fn extract_content(v: &Value, _provider: &str) -> Option<String> {
 }
 
 fn extract_tool_calls(v: &Value) -> Vec<ToolCall> {
-    let Some(arr) = v.pointer("/choices/0/message/tool_calls").and_then(|x| x.as_array()) else {
+    let Some(arr) = v
+        .pointer("/choices/0/message/tool_calls")
+        .and_then(|x| x.as_array())
+    else {
         return vec![];
     };
-    arr.iter().map(|tc| ToolCall {
-        id: tc.get("id").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-        call_type: tc.get("type").and_then(|s| s.as_str()).unwrap_or("function").to_string(),
-        function_name: tc.pointer("/function/name").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-        function_args: tc.pointer("/function/arguments").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-    }).collect()
+    arr.iter()
+        .map(|tc| ToolCall {
+            id: tc
+                .get("id")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string(),
+            call_type: tc
+                .get("type")
+                .and_then(|s| s.as_str())
+                .unwrap_or("function")
+                .to_string(),
+            function_name: tc
+                .pointer("/function/name")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string(),
+            function_args: tc
+                .pointer("/function/arguments")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string(),
+        })
+        .collect()
 }
 
 struct FollowUpResult {
@@ -359,14 +443,20 @@ async fn make_request(
         req = req.bearer_auth(api_key);
     }
 
-    let resp = req.send().await
+    let resp = req
+        .send()
+        .await
         .map_err(|e| NodeOutput::failed(format!("AI 请求失败: {e}")))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         return Err(NodeOutput {
             status: NodeStatus::Failed,
-            error: Some(format!("AI API 错误 {}: {}", status, &text[..text.len().min(500)])),
+            error: Some(format!(
+                "AI API 错误 {}: {}",
+                status,
+                &text[..text.len().min(500)]
+            )),
             ..Default::default()
         });
     }
@@ -402,16 +492,26 @@ async fn make_request(
                         }
                         if let Ok(v) = serde_json::from_str::<Value>(data) {
                             if let Some(delta) = v.pointer("/choices/0/delta") {
-                                if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                if let Some(content) = delta.get("content").and_then(|c| c.as_str())
+                                {
                                     if !content.is_empty() {
                                         full_content.push_str(content);
-                                        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
-                                            crate::core::events::StreamKind::Stdout, content.to_string());
+                                        crate::nodes::node::stream_event(
+                                            &ctx.app,
+                                            &ctx.execution_id,
+                                            &ctx.node_id,
+                                            crate::core::events::StreamKind::Stdout,
+                                            content.to_string(),
+                                        );
                                     }
                                 }
-                                if let Some(tcs) = delta.get("tool_calls").and_then(|t| t.as_array()) {
+                                if let Some(tcs) =
+                                    delta.get("tool_calls").and_then(|t| t.as_array())
+                                {
                                     for tc in tcs {
-                                        let idx = tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+                                        let idx =
+                                            tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0)
+                                                as usize;
                                         while acc_tool_calls.len() <= idx {
                                             acc_tool_calls.push(ToolCall::default());
                                         }
@@ -422,17 +522,24 @@ async fn make_request(
                                             acc_tool_calls[idx].call_type = t.to_string();
                                         }
                                         if let Some(func) = tc.get("function") {
-                                            if let Some(name) = func.get("name").and_then(|s| s.as_str()) {
+                                            if let Some(name) =
+                                                func.get("name").and_then(|s| s.as_str())
+                                            {
                                                 acc_tool_calls[idx].function_name.push_str(name);
                                             }
-                                            if let Some(args) = func.get("arguments").and_then(|s| s.as_str()) {
+                                            if let Some(args) =
+                                                func.get("arguments").and_then(|s| s.as_str())
+                                            {
                                                 acc_tool_calls[idx].function_args.push_str(args);
                                             }
                                         }
                                     }
                                 }
                             }
-                            if let Some(fr) = v.pointer("/choices/0/finish_reason").and_then(|x| x.as_str()) {
+                            if let Some(fr) = v
+                                .pointer("/choices/0/finish_reason")
+                                .and_then(|x| x.as_str())
+                            {
                                 finish_reason = Some(fr.to_string());
                             }
                         }
@@ -448,14 +555,21 @@ async fn make_request(
         }
     } else {
         // 非流式
-        let text = resp.text().await
+        let text = resp
+            .text()
+            .await
             .map_err(|e| NodeOutput::failed(format!("读 AI 响应失败: {e}")))?;
         let v: Value = serde_json::from_str(&text)
             .map_err(|e| NodeOutput::failed(format!("AI 响应不是 JSON: {e}")))?;
         if let Some(content) = extract_content(&v, &cfg.provider) {
             full_content.push_str(&content);
-            crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
-                crate::core::events::StreamKind::Stdout, content);
+            crate::nodes::node::stream_event(
+                &ctx.app,
+                &ctx.execution_id,
+                &ctx.node_id,
+                crate::core::events::StreamKind::Stdout,
+                content,
+            );
         }
         Ok(extract_tool_calls(&v))
     }
@@ -480,18 +594,26 @@ async fn follow_up_request(
     if !api_key.is_empty() {
         req = req.bearer_auth(api_key);
     }
-    let resp = req.send().await
+    let resp = req
+        .send()
+        .await
         .map_err(|e| NodeOutput::failed(format!("AI 工具回呼失败: {e}")))?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         return Err(NodeOutput {
             status: NodeStatus::Failed,
-            error: Some(format!("AI 工具回呼错误 {}: {}", status, &text[..text.len().min(500)])),
+            error: Some(format!(
+                "AI 工具回呼错误 {}: {}",
+                status,
+                &text[..text.len().min(500)]
+            )),
             ..Default::default()
         });
     }
-    let text = resp.text().await
+    let text = resp
+        .text()
+        .await
         .map_err(|e| NodeOutput::failed(format!("读工具回呼响应失败: {e}")))?;
     let v: Value = serde_json::from_str(&text)
         .map_err(|e| NodeOutput::failed(format!("工具回呼不是 JSON: {e}")))?;
@@ -499,11 +621,19 @@ async fn follow_up_request(
     let tool_calls = extract_tool_calls(&v);
 
     if !content.is_empty() {
-        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
-            crate::core::events::StreamKind::Stdout, content.clone());
+        crate::nodes::node::stream_event(
+            &ctx.app,
+            &ctx.execution_id,
+            &ctx.node_id,
+            crate::core::events::StreamKind::Stdout,
+            content.clone(),
+        );
     }
     let _ = ctx; // avoid unused warning
-    Ok(FollowUpResult { content, tool_calls })
+    Ok(FollowUpResult {
+        content,
+        tool_calls,
+    })
 }
 
 fn read_keyring(name: &str) -> Option<String> {
@@ -522,7 +652,10 @@ mod tests {
                 "message": { "role": "assistant", "content": "Hello, world!" }
             }]
         });
-        assert_eq!(extract_content(&v, "openai"), Some("Hello, world!".to_string()));
+        assert_eq!(
+            extract_content(&v, "openai"),
+            Some("Hello, world!".to_string())
+        );
     }
 
     #[test]
@@ -530,7 +663,10 @@ mod tests {
         let v = json!({
             "message": { "role": "assistant", "content": "Hi from ollama" }
         });
-        assert_eq!(extract_content(&v, "ollama"), Some("Hi from ollama".to_string()));
+        assert_eq!(
+            extract_content(&v, "ollama"),
+            Some("Hi from ollama".to_string())
+        );
     }
 
     #[test]

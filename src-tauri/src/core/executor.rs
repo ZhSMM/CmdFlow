@@ -21,9 +21,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::events::{
-    emit, NodeStatus, RunEvent, StreamKind,
-};
+use crate::core::events::{emit, NodeStatus, RunEvent, StreamKind};
 use crate::error::AppResult;
 use crate::storage::db::DbPool;
 
@@ -34,7 +32,7 @@ pub struct ExecutionSpec {
     pub command_id: String,
     pub command_name: String,
     pub command_type: String, // cmd / pwsh / python / node / bash
-    pub template: String, // 已渲染完的最终命令
+    pub template: String,     // 已渲染完的最终命令
     pub working_dir: Option<PathBuf>,
     pub env: HashMap<String, String>,
     pub timeout_ms: Option<u64>,
@@ -146,7 +144,11 @@ pub async fn execute(
     let mut child = match spawn_result {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!("[executor] spawn failed exec_id={} err={}", spec.execution_id, e);
+            tracing::error!(
+                "[executor] spawn failed exec_id={} err={}",
+                spec.execution_id,
+                e
+            );
             let result = ExecutionResult {
                 execution_id: spec.execution_id.clone(),
                 exit_code: None,
@@ -258,32 +260,46 @@ fn build_command(command_type: &str, template: &str) -> (String, Vec<String>) {
     match command_type {
         "cmd" => {
             // cmd /c "command"
-            ("cmd".to_string(), vec!["/c".to_string(), template.to_string()])
+            (
+                "cmd".to_string(),
+                vec!["/c".to_string(), template.to_string()],
+            )
         }
         "pwsh" => {
             // PowerShell 7+ 优先，没有就降级到 Windows PowerShell 5.1
             let bin = powershell_bin();
             (
                 bin.to_string(),
-                vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()],
+                vec![
+                    "-NoProfile".to_string(),
+                    "-Command".to_string(),
+                    template.to_string(),
+                ],
             )
         }
         "powershell" => {
             // 明确指定 Windows PowerShell 5.1，不做探测
             (
                 "powershell".to_string(),
-                vec!["-NoProfile".to_string(), "-Command".to_string(), template.to_string()],
+                vec![
+                    "-NoProfile".to_string(),
+                    "-Command".to_string(),
+                    template.to_string(),
+                ],
             )
         }
-        "python" => {
-            ("python".to_string(), vec!["-c".to_string(), template.to_string()])
-        }
-        "node" => {
-            ("node".to_string(), vec!["-e".to_string(), template.to_string()])
-        }
-        "bash" => {
-            ("bash".to_string(), vec!["-c".to_string(), template.to_string()])
-        }
+        "python" => (
+            "python".to_string(),
+            vec!["-c".to_string(), template.to_string()],
+        ),
+        "node" => (
+            "node".to_string(),
+            vec!["-e".to_string(), template.to_string()],
+        ),
+        "bash" => (
+            "bash".to_string(),
+            vec!["-c".to_string(), template.to_string()],
+        ),
         // 自定义/未识别:直接当作可执行文件名
         other => (other.to_string(), vec![template.to_string()]),
     }
@@ -306,7 +322,12 @@ pub(crate) fn powershell_bin() -> &'static str {
             tracing::warn!("[executor] 未找到 pwsh.exe 或 powershell.exe，默认回退到 pwsh");
             "pwsh"
         };
-        tracing::info!("[executor] PowerShell binary: {} (pwsh={}, legacy={})", chosen, pwsh, legacy);
+        tracing::info!(
+            "[executor] PowerShell binary: {} (pwsh={}, legacy={})",
+            chosen,
+            pwsh,
+            legacy
+        );
         chosen
     })
 }
@@ -319,7 +340,11 @@ fn find_on_path(name: &str) -> bool {
         for dir in std::env::split_paths(&paths) {
             for ext in exts {
                 let mut p: PathBuf = dir.clone();
-                let file = if ext.is_empty() { name.to_string() } else { format!("{name}{ext}") };
+                let file = if ext.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{name}{ext}")
+                };
                 p.push(&file);
                 if p.is_file() {
                     return true;
@@ -374,11 +399,7 @@ where
     })
 }
 
-async fn insert_execution(
-    db: &DbPool,
-    spec: &ExecutionSpec,
-    started_at: i64,
-) -> AppResult<()> {
+async fn insert_execution(db: &DbPool, spec: &ExecutionSpec, started_at: i64) -> AppResult<()> {
     let conn = db.get()?;
     let input_params = spec
         .input_params

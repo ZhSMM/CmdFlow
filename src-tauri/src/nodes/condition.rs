@@ -17,17 +17,29 @@ struct ConditionConfig {
     false_label: String,
 }
 
-fn default_true() -> String { "true".to_string() }
-fn default_false() -> String { "false".to_string() }
+fn default_true() -> String {
+    "true".to_string()
+}
+fn default_false() -> String {
+    "false".to_string()
+}
 
 pub struct ConditionNode;
 
 #[async_trait]
 impl Node for ConditionNode {
-    fn type_id(&self) -> &'static str { "condition" }
-    fn display_name(&self) -> &'static str { "条件" }
-    fn category(&self) -> &'static str { "control" }
-    fn description(&self) -> &'static str { "条件分支" }
+    fn type_id(&self) -> &'static str {
+        "condition"
+    }
+    fn display_name(&self) -> &'static str {
+        "条件"
+    }
+    fn category(&self) -> &'static str {
+        "control"
+    }
+    fn description(&self) -> &'static str {
+        "条件分支"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -41,9 +53,14 @@ impl Node for ConditionNode {
         })
     }
 
-    async fn execute(&self, _ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
-        let cfg: ConditionConfig = serde_json::from_value(config)
-            .map_err(|e| crate::error::AppError::invalid(format!("condition config 解析失败: {e}")))?;
+    async fn execute(
+        &self,
+        _ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
+        let cfg: ConditionConfig = serde_json::from_value(config).map_err(|e| {
+            crate::error::AppError::invalid(format!("condition config 解析失败: {e}"))
+        })?;
 
         // Phase 2 简化: 表达式必须返回 "true" / "false"
         // 简单实现: 用 boolector 风格的条件求值
@@ -51,7 +68,11 @@ impl Node for ConditionNode {
         // 完整表达式引擎留 Phase 4
         let result = evaluate_simple(&cfg.expression, &_ctx);
 
-        let branch = if result { cfg.true_label.clone() } else { cfg.false_label.clone() };
+        let branch = if result {
+            cfg.true_label.clone()
+        } else {
+            cfg.false_label.clone()
+        };
 
         Ok(NodeOutput {
             value: json!({
@@ -96,10 +117,18 @@ fn evaluate_simple(expr: &str, ctx: &NodeContext) -> bool {
             return match *op {
                 "==" => json_eq(&lv, &rv),
                 "!=" => !json_eq(&lv, &rv),
-                ">" => json_cmp(&lv, &rv).map(|o| o == std::cmp::Ordering::Greater).unwrap_or(false),
-                "<" => json_cmp(&lv, &rv).map(|o| o == std::cmp::Ordering::Less).unwrap_or(false),
-                ">=" => json_cmp(&lv, &rv).map(|o| o != std::cmp::Ordering::Less).unwrap_or(false),
-                "<=" => json_cmp(&lv, &rv).map(|o| o != std::cmp::Ordering::Greater).unwrap_or(false),
+                ">" => json_cmp(&lv, &rv)
+                    .map(|o| o == std::cmp::Ordering::Greater)
+                    .unwrap_or(false),
+                "<" => json_cmp(&lv, &rv)
+                    .map(|o| o == std::cmp::Ordering::Less)
+                    .unwrap_or(false),
+                ">=" => json_cmp(&lv, &rv)
+                    .map(|o| o != std::cmp::Ordering::Less)
+                    .unwrap_or(false),
+                "<=" => json_cmp(&lv, &rv)
+                    .map(|o| o != std::cmp::Ordering::Greater)
+                    .unwrap_or(false),
                 _ => false,
             };
         }
@@ -117,9 +146,11 @@ fn find_top_level(s: &str, op: &str) -> Option<usize> {
     let mut i = 0;
     while i + op_bytes.len() <= bytes.len() {
         let c = bytes[i] as char;
-        if c == '(' { depth += 1; }
-        else if c == ')' { depth -= 1; }
-        else if depth == 0 && &bytes[i..i+op_bytes.len()] == op_bytes {
+        if c == '(' {
+            depth += 1;
+        } else if c == ')' {
+            depth -= 1;
+        } else if depth == 0 && &bytes[i..i + op_bytes.len()] == op_bytes {
             return Some(i);
         }
         i += 1;
@@ -132,7 +163,7 @@ fn lookup_value(path: &str, ctx: &NodeContext) -> Value {
     // nodeId.field
     if let Some(dot) = path.find('.') {
         let node_id = &path[..dot];
-        let field = &path[dot+1..];
+        let field = &path[dot + 1..];
         if let Some(node) = ctx.upstream_outputs.get(node_id) {
             if let Some(v) = node.get(field) {
                 return v.clone();
@@ -156,13 +187,25 @@ fn lookup_value(path: &str, ctx: &NodeContext) -> Value {
 fn parse_literal(s: &str) -> Value {
     let s = s.trim();
     if (s.starts_with('\'') && s.ends_with('\'')) || (s.starts_with('"') && s.ends_with('"')) {
-        return Value::String(s[1..s.len()-1].to_string());
+        return Value::String(s[1..s.len() - 1].to_string());
     }
-    if s == "true" { return Value::Bool(true); }
-    if s == "false" { return Value::Bool(false); }
-    if s == "null" { return Value::Null; }
-    if let Ok(n) = s.parse::<i64>() { return Value::Number(n.into()); }
-    if let Ok(f) = s.parse::<f64>() { return serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null); }
+    if s == "true" {
+        return Value::Bool(true);
+    }
+    if s == "false" {
+        return Value::Bool(false);
+    }
+    if s == "null" {
+        return Value::Null;
+    }
+    if let Ok(n) = s.parse::<i64>() {
+        return Value::Number(n.into());
+    }
+    if let Ok(f) = s.parse::<f64>() {
+        return serde_json::Number::from_f64(f)
+            .map(Value::Number)
+            .unwrap_or(Value::Null);
+    }
     Value::String(s.to_string())
 }
 

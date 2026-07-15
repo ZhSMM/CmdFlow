@@ -14,11 +14,13 @@ use serde::{Deserialize, Serialize};
 pub fn default_blacklist() -> Vec<BlacklistRule> {
     vec![
         BlacklistRule {
-            pattern: r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|-rf|-fr)\s+/\s*$".to_string(),
+            pattern: r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|-rf|-fr)\s+/\s*$"
+                .to_string(),
             description: "rm -rf / 根目录删除".to_string(),
         },
         BlacklistRule {
-            pattern: r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|-rf|-fr)\s+~".to_string(),
+            pattern: r"(^|\s)rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|-rf|-fr)\s+~"
+                .to_string(),
             description: "rm -rf ~ 家目录删除".to_string(),
         },
         BlacklistRule {
@@ -99,9 +101,16 @@ pub fn check(command: &str) -> Option<BlacklistHit> {
 /// 启发式：检查命令是否包含「危险」关键字，需要用户二次确认
 pub fn is_dangerous_heuristic(command: &str) -> bool {
     let keywords = [
-        r"\brm\b", r"\bdel\b", r"\bdrop\b", r"\btruncate\b",
-        r"\bformat\b", r"\bdiskpart\b", r"\bshutdown\b", r"\breboot\b",
-        r"\bkill\s+-9\b", r"\bgit\s+push\s+(-f|--force)\b",
+        r"\brm\b",
+        r"\bdel\b",
+        r"\bdrop\b",
+        r"\btruncate\b",
+        r"\bformat\b",
+        r"\bdiskpart\b",
+        r"\bshutdown\b",
+        r"\breboot\b",
+        r"\bkill\s+-9\b",
+        r"\bgit\s+push\s+(-f|--force)\b",
         r"\bgit\s+reset\s+--hard\b",
     ];
     let re = Regex::new(&format!("(?i)({})", keywords.join("|"))).unwrap();

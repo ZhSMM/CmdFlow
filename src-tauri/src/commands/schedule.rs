@@ -62,8 +62,7 @@ pub async fn create_schedule(
 
     let id = uuid::Uuid::new_v4().to_string();
     let now_ts = Utc::now().timestamp();
-    let next_at = scheduler::next_run(&input.cron_expr, Utc::now())?
-        .map(|d| d.timestamp());
+    let next_at = scheduler::next_run(&input.cron_expr, Utc::now())?.map(|d| d.timestamp());
 
     let conn = state.db.get()?;
     conn.execute(
@@ -116,13 +115,22 @@ pub async fn update_schedule(
         )?;
     }
     if let Some(tz) = &input.timezone {
-        conn.execute("UPDATE schedules SET timezone = ?1 WHERE id = ?2", params![tz, input.id])?;
+        conn.execute(
+            "UPDATE schedules SET timezone = ?1 WHERE id = ?2",
+            params![tz, input.id],
+        )?;
     }
     if let Some(en) = input.enabled {
-        conn.execute("UPDATE schedules SET enabled = ?1 WHERE id = ?2", params![en as i32, input.id])?;
+        conn.execute(
+            "UPDATE schedules SET enabled = ?1 WHERE id = ?2",
+            params![en as i32, input.id],
+        )?;
     }
     if let Some(mode) = &input.mode {
-        conn.execute("UPDATE schedules SET mode = ?1 WHERE id = ?2", params![mode, input.id])?;
+        conn.execute(
+            "UPDATE schedules SET mode = ?1 WHERE id = ?2",
+            params![mode, input.id],
+        )?;
     }
     Ok(())
 }
@@ -178,7 +186,8 @@ pub async fn trigger_schedule_now(
     }
 
     let detail = crate::storage::models::WorkflowDetail::load_full(&state.db, &sched.workflow_id)?;
-    let detail = detail.ok_or_else(|| AppError::not_found(format!("workflow:{}", sched.workflow_id)))?;
+    let detail =
+        detail.ok_or_else(|| AppError::not_found(format!("workflow:{}", sched.workflow_id)))?;
 
     let registry = state.execution_registry.clone();
     let cancel = registry.register(execution_id.clone()).await;
@@ -193,9 +202,17 @@ pub async fn trigger_schedule_now(
 
     task::spawn(async move {
         let res = crate::core::dag_executor::execute_workflow(
-            app2, db2, exec_id3.clone(), wf_id, wf_name, nodes, edges,
-            std::collections::HashMap::new(), cancel,
-        ).await;
+            app2,
+            db2,
+            exec_id3.clone(),
+            wf_id,
+            wf_name,
+            nodes,
+            edges,
+            std::collections::HashMap::new(),
+            cancel,
+        )
+        .await;
         if let Ok(conn) = db3.get() {
             match res {
                 Ok(r) => {
@@ -248,11 +265,7 @@ async fn register_os_task(schedule_id: &str, input: &ScheduleInput) -> AppResult
 
         let output = Command::new("schtasks")
             .args([
-                "/Create",
-                "/SC", "ONCE",
-                "/TN", &task_name,
-                "/TR", &task_args,
-                "/ST", "00:00",
+                "/Create", "/SC", "ONCE", "/TN", &task_name, "/TR", &task_args, "/ST", "00:00",
                 "/F",
             ])
             .output();
@@ -264,7 +277,11 @@ async fn register_os_task(schedule_id: &str, input: &ScheduleInput) -> AppResult
                 let _ = conn_str; // OS 任务 ID 写库
             }
             _ => {
-                tracing::warn!("OS 任务注册失败 (Phase 3 简化版,任务: {} 时间: {})", task_name, cron_desc);
+                tracing::warn!(
+                    "OS 任务注册失败 (Phase 3 简化版,任务: {} 时间: {})",
+                    task_name,
+                    cron_desc
+                );
             }
         }
     }

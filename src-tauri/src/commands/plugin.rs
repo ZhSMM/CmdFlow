@@ -111,9 +111,7 @@ pub async fn list_plugins(app: AppHandle) -> AppResult<Vec<PluginInfo>> {
 
         // 计算大小
         let entry_path = path.join(&manifest.entry);
-        let size = std::fs::metadata(&entry_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let size = std::fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
 
         let plugin: Plugin = conn.query_row(
             "SELECT id, name, version, author, description, format, entry, manifest, enabled, installed_at, updated_at
@@ -208,7 +206,10 @@ pub async fn execute_js_plugin(
     let manifest: PluginManifest = serde_json::from_str(&manifest_str)
         .map_err(|e| AppError::other(format!("manifest 解析失败: {e}")))?;
     if manifest.format != "js" {
-        return Err(AppError::other(format!("不支持的插件格式: {}", manifest.format)));
+        return Err(AppError::other(format!(
+            "不支持的插件格式: {}",
+            manifest.format
+        )));
     }
 
     let entry_path = plugin_dir.join(&manifest.entry);
@@ -234,9 +235,7 @@ pub async fn execute_js_plugin(
             return Err(AppError::other(format!("插件执行 join 失败: {join_err}")));
         }
         Err(_) => {
-            return Err(AppError::other(format!(
-                "插件 {plugin_id} 执行超时 (5s)"
-            )));
+            return Err(AppError::other(format!("插件 {plugin_id} 执行超时 (5s)")));
         }
     };
 

@@ -50,9 +50,7 @@ pub enum RunEvent {
         error: Option<String>,
     },
     /// 取消请求
-    ExecutionCancelled {
-        execution_id: String,
-    },
+    ExecutionCancelled { execution_id: String },
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

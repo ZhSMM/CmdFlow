@@ -33,12 +33,11 @@ pub fn run(conn: &mut Connection) -> AppResult<()> {
 
     // 2. 逐个执行未跑过的迁移
     for (name, sql) in MIGRATIONS {
-        let already_applied: bool = conn
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = ?1)",
-                [name],
-                |r| r.get(0),
-            )?;
+        let already_applied: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = ?1)",
+            [name],
+            |r| r.get(0),
+        )?;
 
         if already_applied {
             tracing::debug!("迁移 {} 已应用，跳过", name);

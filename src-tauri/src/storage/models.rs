@@ -315,15 +315,17 @@ impl WorkflowDetail {
                 "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
                  FROM workflows WHERE id = ?1",
                 [&id],
-                |r| Ok(Workflow {
-                    id: r.get(0)?,
-                    name: r.get(1)?,
-                    description: r.get(2)?,
-                    enabled: r.get(3)?,
-                    trigger_type: r.get(4)?,
-                    created_at: r.get(5)?,
-                    updated_at: r.get(6)?,
-                }),
+                |r| {
+                    Ok(Workflow {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        description: r.get(2)?,
+                        enabled: r.get(3)?,
+                        trigger_type: r.get(4)?,
+                        created_at: r.get(5)?,
+                        updated_at: r.get(6)?,
+                    })
+                },
             )
             .ok();
         let workflow = match workflow {
@@ -342,7 +344,8 @@ impl WorkflowDetail {
                     workflow_id: r.get(1)?,
                     node_type: r.get::<_, String>(2)?,
                     command_id: r.get(3)?,
-                    config: r.get::<_, String>(4)
+                    config: r
+                        .get::<_, String>(4)
                         .ok()
                         .and_then(|s| serde_json::from_str(&s).ok())
                         .unwrap_or(serde_json::Value::Null),
@@ -367,7 +370,8 @@ impl WorkflowDetail {
                     target_node: r.get(3)?,
                     source_port: r.get(4)?,
                     target_port: r.get(5)?,
-                    condition: r.get::<_, Option<String>>(6)
+                    condition: r
+                        .get::<_, Option<String>>(6)
                         .ok()
                         .flatten()
                         .and_then(|s| serde_json::from_str(&s).ok()),
@@ -376,6 +380,10 @@ impl WorkflowDetail {
             .filter_map(Result::ok)
             .collect();
 
-        Ok(Some(WorkflowDetail { workflow, nodes, edges }))
+        Ok(Some(WorkflowDetail {
+            workflow,
+            nodes,
+            edges,
+        }))
     }
 }

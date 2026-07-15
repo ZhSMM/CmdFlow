@@ -17,10 +17,18 @@ pub struct DelayNode;
 
 #[async_trait]
 impl Node for DelayNode {
-    fn type_id(&self) -> &'static str { "delay" }
-    fn display_name(&self) -> &'static str { "延时" }
-    fn category(&self) -> &'static str { "control" }
-    fn description(&self) -> &'static str { "等待一段时间" }
+    fn type_id(&self) -> &'static str {
+        "delay"
+    }
+    fn display_name(&self) -> &'static str {
+        "延时"
+    }
+    fn category(&self) -> &'static str {
+        "control"
+    }
+    fn description(&self) -> &'static str {
+        "等待一段时间"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -32,13 +40,21 @@ impl Node for DelayNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: DelayConfig = serde_json::from_value(config)
             .map_err(|e| crate::error::AppError::invalid(format!("delay config 解析失败: {e}")))?;
 
-        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+        crate::nodes::node::stream_event(
+            &ctx.app,
+            &ctx.execution_id,
+            &ctx.node_id,
             crate::core::events::StreamKind::System,
-            format!("⏱ 等待 {} ms\n", cfg.duration_ms));
+            format!("⏱ 等待 {} ms\n", cfg.duration_ms),
+        );
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_millis(cfg.duration_ms)) => {

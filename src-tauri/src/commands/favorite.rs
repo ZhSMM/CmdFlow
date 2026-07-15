@@ -3,7 +3,6 @@
 use serde::Deserialize;
 use tauri::State;
 
-
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::storage::models::{Command, CommandType, Favorite};

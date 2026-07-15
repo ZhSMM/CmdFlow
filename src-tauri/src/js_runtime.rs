@@ -17,10 +17,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use boa_engine::{
-    js_string,
-    native_function::NativeFunction,
-    object::ObjectInitializer,
-    property::Attribute,
+    js_string, native_function::NativeFunction, object::ObjectInitializer, property::Attribute,
     Context, JsArgs, JsError, JsResult, JsValue, Source,
 };
 
@@ -33,7 +30,9 @@ pub struct LogBuffer {
 }
 
 impl LogBuffer {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn push(&self, msg: String) {
         self.inner.lock().unwrap().push(msg);
     }
@@ -67,11 +66,7 @@ pub fn prepare_context(source: &str, logs: LogBuffer) -> AppResult<Context> {
         .build();
 
     context
-        .register_global_property(
-            js_string!("cmdflow"),
-            cmdflow_obj,
-            Attribute::all(),
-        )
+        .register_global_property(js_string!("cmdflow"), cmdflow_obj, Attribute::all())
         .map_err(|e| AppError::other(format!("注册全局失败: {e}")))?;
 
     // 编译并执行用户脚本 (顶层表达式, run 函数定义到 global)

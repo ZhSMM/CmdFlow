@@ -59,10 +59,7 @@ pub fn list_commands(
 }
 
 #[tauri::command]
-pub fn get_command(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<CommandDetail> {
+pub fn get_command(state: State<'_, AppState>, id: String) -> AppResult<CommandDetail> {
     let conn = state.db.get()?;
 
     let cmd: Command = conn.query_row(
@@ -120,11 +117,14 @@ pub fn get_command(
             label: r.get(3)?,
             param_type: r.get(4)?,
             required: r.get(5)?,
-            default_value: r.get::<_, Option<String>>(6)?
+            default_value: r
+                .get::<_, Option<String>>(6)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
-            options: r.get::<_, Option<String>>(7)?
+            options: r
+                .get::<_, Option<String>>(7)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
-            validation: r.get::<_, Option<String>>(8)?
+            validation: r
+                .get::<_, Option<String>>(8)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
             sensitive: r.get(9)?,
             description: r.get(10)?,
@@ -175,10 +175,7 @@ pub struct CreateParamInput {
 }
 
 #[tauri::command]
-pub fn create_command(
-    state: State<'_, AppState>,
-    input: CreateCommandInput,
-) -> AppResult<String> {
+pub fn create_command(state: State<'_, AppState>, input: CreateCommandInput) -> AppResult<String> {
     let conn = state.db.get()?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
@@ -265,10 +262,7 @@ pub struct UpdateCommandInput {
 }
 
 #[tauri::command]
-pub fn update_command(
-    state: State<'_, AppState>,
-    input: UpdateCommandInput,
-) -> AppResult<()> {
+pub fn update_command(state: State<'_, AppState>, input: UpdateCommandInput) -> AppResult<()> {
     let conn = state.db.get()?;
     let now = chrono::Utc::now().timestamp();
     let tx = conn.unchecked_transaction()?;
@@ -276,10 +270,22 @@ pub fn update_command(
     // commands 表
     let mut updates: Vec<&str> = Vec::new();
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if let Some(n) = &input.name { updates.push("name = ?"); args.push(Box::new(n.clone())); }
-    if let Some(d) = &input.description { updates.push("description = ?"); args.push(Box::new(d.clone())); }
-    if let Some(c) = &input.category { updates.push("category = ?"); args.push(Box::new(c.clone())); }
-    if let Some(t) = &input.tags { updates.push("tags = ?"); args.push(Box::new(serde_json::to_string(t)?)); }
+    if let Some(n) = &input.name {
+        updates.push("name = ?");
+        args.push(Box::new(n.clone()));
+    }
+    if let Some(d) = &input.description {
+        updates.push("description = ?");
+        args.push(Box::new(d.clone()));
+    }
+    if let Some(c) = &input.category {
+        updates.push("category = ?");
+        args.push(Box::new(c.clone()));
+    }
+    if let Some(t) = &input.tags {
+        updates.push("tags = ?");
+        args.push(Box::new(serde_json::to_string(t)?));
+    }
     if !updates.is_empty() {
         updates.push("updated_at = ?");
         args.push(Box::new(now));
@@ -292,11 +298,26 @@ pub fn update_command(
     // command_versions 表
     let mut v_updates: Vec<&str> = Vec::new();
     let mut v_args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if let Some(t) = &input.template { v_updates.push("template = ?"); v_args.push(Box::new(t.clone())); }
-    if let Some(d) = &input.working_dir { v_updates.push("working_dir = ?"); v_args.push(Box::new(d.clone())); }
-    if let Some(e) = &input.env { v_updates.push("env = ?"); v_args.push(Box::new(serde_json::to_string(e)?)); }
-    if let Some(t) = &input.timeout_ms { v_updates.push("timeout_ms = ?"); v_args.push(Box::new(*t)); }
-    if let Some(s) = &input.shell { v_updates.push("shell = ?"); v_args.push(Box::new(s.clone())); }
+    if let Some(t) = &input.template {
+        v_updates.push("template = ?");
+        v_args.push(Box::new(t.clone()));
+    }
+    if let Some(d) = &input.working_dir {
+        v_updates.push("working_dir = ?");
+        v_args.push(Box::new(d.clone()));
+    }
+    if let Some(e) = &input.env {
+        v_updates.push("env = ?");
+        v_args.push(Box::new(serde_json::to_string(e)?));
+    }
+    if let Some(t) = &input.timeout_ms {
+        v_updates.push("timeout_ms = ?");
+        v_args.push(Box::new(*t));
+    }
+    if let Some(s) = &input.shell {
+        v_updates.push("shell = ?");
+        v_args.push(Box::new(s.clone()));
+    }
     if !v_updates.is_empty() {
         v_args.push(Box::new(input.id.clone()));
         let sql = format!(
@@ -336,7 +357,10 @@ pub fn update_command(
             )?;
         }
         // 顺手更新 commands.updated_at
-        tx.execute("UPDATE commands SET updated_at = ?1 WHERE id = ?2", rusqlite::params![now, &input.id])?;
+        tx.execute(
+            "UPDATE commands SET updated_at = ?1 WHERE id = ?2",
+            rusqlite::params![now, &input.id],
+        )?;
     }
 
     tx.commit()?;

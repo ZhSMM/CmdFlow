@@ -16,10 +16,7 @@ pub struct DagValidationResult {
 
 /// 校验 DAG，返回错误/警告/拓扑序/并行层。
 /// 任何输入（即使有错误）也尽量返回部分结果，便于 UI 高亮问题。
-pub fn validate(
-    nodes: &[WorkflowNode],
-    edges: &[WorkflowEdge],
-) -> Option<DagValidationResult> {
+pub fn validate(nodes: &[WorkflowNode], edges: &[WorkflowEdge]) -> Option<DagValidationResult> {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
@@ -115,10 +112,7 @@ pub fn validate(
 }
 
 /// 把节点按「依赖深度」分层，每层内的节点可并行执行。
-fn compute_parallel_layers(
-    nodes: &[WorkflowNode],
-    edges: &[WorkflowEdge],
-) -> Vec<Vec<String>> {
+fn compute_parallel_layers(nodes: &[WorkflowNode], edges: &[WorkflowEdge]) -> Vec<Vec<String>> {
     let mut depth: HashMap<&str, usize> = HashMap::new();
     let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
     for n in nodes {

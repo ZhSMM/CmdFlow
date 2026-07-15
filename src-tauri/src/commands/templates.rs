@@ -7,9 +7,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::commands::yaml_io::{self, ImportResult};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use crate::commands::yaml_io::{self, ImportResult};
 
 // ==================== 嵌入的模板文件 ====================
 
@@ -52,19 +52,33 @@ struct TemplateEntry {
 fn builtin_templates() -> Vec<(&'static str, TemplateEntry)> {
     vec![
         ("git-deploy", TemplateEntry { yaml: GIT_DEPLOY }),
-        ("docker-build-push", TemplateEntry { yaml: DOCKER_BUILD_PUSH }),
+        (
+            "docker-build-push",
+            TemplateEntry {
+                yaml: DOCKER_BUILD_PUSH,
+            },
+        ),
         ("log-cleanup", TemplateEntry { yaml: LOG_CLEANUP }),
-        ("http-data-pipeline", TemplateEntry { yaml: HTTP_DATA_PIPELINE }),
+        (
+            "http-data-pipeline",
+            TemplateEntry {
+                yaml: HTTP_DATA_PIPELINE,
+            },
+        ),
         ("daily-backup", TemplateEntry { yaml: DAILY_BACKUP }),
-        ("http-healthcheck", TemplateEntry { yaml: HTTP_HEALTHCHECK }),
+        (
+            "http-healthcheck",
+            TemplateEntry {
+                yaml: HTTP_HEALTHCHECK,
+            },
+        ),
     ]
 }
 
 // ==================== 解析 ====================
 
 fn load_manifest() -> AppResult<Vec<ManifestEntry>> {
-    serde_yaml::from_str(MANIFEST)
-        .map_err(|e| AppError::other(format!("模板清单解析失败: {e}")))
+    serde_yaml::from_str(MANIFEST).map_err(|e| AppError::other(format!("模板清单解析失败: {e}")))
 }
 
 fn build_summary(yaml: &str, manifest: &ManifestEntry) -> AppResult<TemplateSummary> {
@@ -193,7 +207,9 @@ mod tests {
     fn list_templates_returns_all() {
         // 用 tokio runtime 跑 async 函数
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let res = rt.block_on(list_templates()).expect("list_templates 应成功");
+        let res = rt
+            .block_on(list_templates())
+            .expect("list_templates 应成功");
         let manifest_count = load_manifest().unwrap().len();
         assert_eq!(res.len(), manifest_count, "列表数量应等于 manifest 数量");
         for t in &res {

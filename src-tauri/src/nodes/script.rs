@@ -24,10 +24,18 @@ pub struct ScriptNode;
 
 #[async_trait]
 impl Node for ScriptNode {
-    fn type_id(&self) -> &'static str { "script" }
-    fn display_name(&self) -> &'static str { "脚本" }
-    fn category(&self) -> &'static str { "core" }
-    fn description(&self) -> &'static str { "直接执行一段脚本 (python/node/bash/pwsh)" }
+    fn type_id(&self) -> &'static str {
+        "script"
+    }
+    fn display_name(&self) -> &'static str {
+        "脚本"
+    }
+    fn category(&self) -> &'static str {
+        "core"
+    }
+    fn description(&self) -> &'static str {
+        "直接执行一段脚本 (python/node/bash/pwsh)"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -47,7 +55,11 @@ impl Node for ScriptNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: ScriptConfig = serde_json::from_value(config.clone())
             .map_err(|e| crate::error::AppError::invalid(format!("script config 解析失败: {e}")))?;
 
@@ -57,14 +69,31 @@ impl Node for ScriptNode {
         let _ = render_config(&json!({}), &interp);
 
         let (program, args) = match cfg.language.as_str() {
-            "python" => ("python".to_string(), vec!["-c".to_string(), cfg.code.clone()]),
+            "python" => (
+                "python".to_string(),
+                vec!["-c".to_string(), cfg.code.clone()],
+            ),
             "node" => ("node".to_string(), vec!["-e".to_string(), cfg.code.clone()]),
             "bash" => ("bash".to_string(), vec!["-c".to_string(), cfg.code.clone()]),
             "pwsh" => {
                 let bin = crate::core::executor::powershell_bin();
-                (bin.to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), cfg.code.clone()])
+                (
+                    bin.to_string(),
+                    vec![
+                        "-NoProfile".to_string(),
+                        "-Command".to_string(),
+                        cfg.code.clone(),
+                    ],
+                )
             }
-            "powershell" => ("powershell".to_string(), vec!["-NoProfile".to_string(), "-Command".to_string(), cfg.code.clone()]),
+            "powershell" => (
+                "powershell".to_string(),
+                vec![
+                    "-NoProfile".to_string(),
+                    "-Command".to_string(),
+                    cfg.code.clone(),
+                ],
+            ),
             other => return Ok(NodeOutput::failed(format!("不支持的脚本语言: {other}"))),
         };
 
@@ -94,8 +123,9 @@ impl Node for ScriptNode {
             cmd.creation_flags(FLAGS);
         }
 
-        let mut child = cmd.spawn().map_err(|e|
-            crate::error::AppError::other(format!("启动脚本失败: {e}")))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| crate::error::AppError::other(format!("启动脚本失败: {e}")))?;
 
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
@@ -120,8 +150,13 @@ impl Node for ScriptNode {
                     Ok(Some(line)) => {
                         buf1.lock().await.push_str(&line);
                         buf1.lock().await.push('\n');
-                        crate::nodes::node::stream_event(&app1, &eid1, &nid1,
-                            crate::core::events::StreamKind::Stdout, format!("{line}\n"));
+                        crate::nodes::node::stream_event(
+                            &app1,
+                            &eid1,
+                            &nid1,
+                            crate::core::events::StreamKind::Stdout,
+                            format!("{line}\n"),
+                        );
                     }
                     _ => break,
                 }
@@ -135,8 +170,13 @@ impl Node for ScriptNode {
                     Ok(Some(line)) => {
                         buf2.lock().await.push_str(&line);
                         buf2.lock().await.push('\n');
-                        crate::nodes::node::stream_event(&app2, &eid2, &nid2,
-                            crate::core::events::StreamKind::Stderr, format!("{line}\n"));
+                        crate::nodes::node::stream_event(
+                            &app2,
+                            &eid2,
+                            &nid2,
+                            crate::core::events::StreamKind::Stderr,
+                            format!("{line}\n"),
+                        );
                     }
                     _ => break,
                 }
@@ -174,8 +214,16 @@ impl Node for ScriptNode {
                     stdout: stdout_text,
                     stderr: stderr_text,
                     exit_code: code,
-                    status: if code == Some(0) { NodeStatus::Success } else { NodeStatus::Failed },
-                    error: if code != Some(0) { Some(format!("退出码: {:?}", code)) } else { None },
+                    status: if code == Some(0) {
+                        NodeStatus::Success
+                    } else {
+                        NodeStatus::Failed
+                    },
+                    error: if code != Some(0) {
+                        Some(format!("退出码: {:?}", code))
+                    } else {
+                        None
+                    },
                     ..Default::default()
                 })
             }

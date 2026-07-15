@@ -131,10 +131,7 @@ pub fn render(template: &str, ctx: &InterpContext) -> AppResult<String> {
         match ctx.resolve(key) {
             Some(val) => result.push_str(&val),
             None => {
-                return Err(AppError::invalid(format!(
-                    "变量未定义: {}",
-                    key
-                )));
+                return Err(AppError::invalid(format!("变量未定义: {}", key)));
             }
         }
 

@@ -105,14 +105,10 @@ impl WasmInstance {
         // 暂时回退到 tracer,后面如果要 UI 显示再换。
 
         linker
-            .func_wrap(
-                "env",
-                "host_log",
-                |level: i32, ptr: i32, len: i32| {
-                    let _ = (level, ptr, len);
-                    // 暂不收集,guest 可以通过 return value 输出
-                },
-            )
+            .func_wrap("env", "host_log", |level: i32, ptr: i32, len: i32| {
+                let _ = (level, ptr, len);
+                // 暂不收集,guest 可以通过 return value 输出
+            })
             .map_err(|e| AppError::other(format!("link host_log 失败: {e}")))?;
 
         let instance = linker
@@ -131,7 +127,9 @@ impl WasmInstance {
             .map_err(|e| AppError::other(format!("wasm 必须导出 dealloc(i32,i32): {e}")))?;
         instance
             .get_typed_func::<(i32, i32, i32, i32), i64>(&mut store, "run")
-            .map_err(|e| AppError::other(format!("wasm 必须导出 run(i32,i32,i32,i32)->i64: {e}")))?;
+            .map_err(|e| {
+                AppError::other(format!("wasm 必须导出 run(i32,i32,i32,i32)->i64: {e}"))
+            })?;
 
         Ok(Self { engine, module })
     }
@@ -162,25 +160,36 @@ impl WasmInstance {
 
         // 1. 写 function name 到线性内存
         let func_bytes = function.as_bytes();
-        let func_ptr = alloc.call(&mut store, func_bytes.len() as i32)
+        let func_ptr = alloc
+            .call(&mut store, func_bytes.len() as i32)
             .map_err(|e| AppError::other(format!("alloc func_name 失败: {e}")))?;
-        memory.write(&mut store, func_ptr as usize, func_bytes)
+        memory
+            .write(&mut store, func_ptr as usize, func_bytes)
             .map_err(|e| AppError::other(format!("写 func_name 失败: {e}")))?;
 
         // 2. 写 input JSON 到线性内存
         let input_str = serde_json::to_string(input)
             .map_err(|e| AppError::other(format!("input 序列化失败: {e}")))?;
         let input_bytes = input_str.as_bytes();
-        let input_ptr = alloc.call(&mut store, input_bytes.len() as i32)
+        let input_ptr = alloc
+            .call(&mut store, input_bytes.len() as i32)
             .map_err(|e| AppError::other(format!("alloc input 失败: {e}")))?;
-        memory.write(&mut store, input_ptr as usize, input_bytes)
+        memory
+            .write(&mut store, input_ptr as usize, input_bytes)
             .map_err(|e| AppError::other(format!("写 input 失败: {e}")))?;
 
         // 3. 调 run
-        let ret = run.call(
-            &mut store,
-            (func_ptr, func_bytes.len() as i32, input_ptr, input_bytes.len() as i32),
-        ).map_err(|e| AppError::other(format!("wasm run 失败: {e}")))?;
+        let ret = run
+            .call(
+                &mut store,
+                (
+                    func_ptr,
+                    func_bytes.len() as i32,
+                    input_ptr,
+                    input_bytes.len() as i32,
+                ),
+            )
+            .map_err(|e| AppError::other(format!("wasm run 失败: {e}")))?;
 
         // 4. 解析返回值 (高 32 = ptr, 低 32 = len)
         let ret_u64 = ret as u64;
@@ -190,7 +199,8 @@ impl WasmInstance {
         // 5. 读输出
         let mut out_buf = vec![0u8; ret_len as usize];
         if ret_len > 0 {
-            memory.read(&store, ret_ptr as usize, &mut out_buf)
+            memory
+                .read(&store, ret_ptr as usize, &mut out_buf)
                 .map_err(|e| AppError::other(format!("读 wasm 输出失败: {e}")))?;
         }
 
@@ -206,9 +216,12 @@ impl WasmInstance {
         }
 
         // 7. 解析 JSON
-        let result: Value = serde_json::from_slice(&out_buf)
-            .map_err(|e| AppError::other(format!("wasm 返回值不是 JSON: {e} (raw: {})",
-                String::from_utf8_lossy(&out_buf))))?;
+        let result: Value = serde_json::from_slice(&out_buf).map_err(|e| {
+            AppError::other(format!(
+                "wasm 返回值不是 JSON: {e} (raw: {})",
+                String::from_utf8_lossy(&out_buf)
+            ))
+        })?;
 
         Ok(result)
     }

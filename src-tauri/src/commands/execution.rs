@@ -18,7 +18,9 @@ use crate::storage::models::{CommandType, Param};
 /// 把 serde_json::Value (期望是 object) 转成 HashMap<String, serde_json::Value>
 fn json_env_to_map(v: &Option<serde_json::Value>) -> HashMap<String, serde_json::Value> {
     match v {
-        Some(serde_json::Value::Object(map)) => map.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+        Some(serde_json::Value::Object(map)) => {
+            map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        }
         _ => HashMap::new(),
     }
 }
@@ -65,7 +67,10 @@ pub async fn preview_command(
     let ctx = build_context(&input.params, &detail.params, &json_env_to_map(&detail.env))?;
 
     let rendered = render(&detail.template, &ctx)?;
-    let cwd = detail.working_dir.as_ref().and_then(|t| render(t, &ctx).ok());
+    let cwd = detail
+        .working_dir
+        .as_ref()
+        .and_then(|t| render(t, &ctx).ok());
     let env_rendered = match &detail.env {
         Some(env_map) => {
             let mut out = HashMap::new();
@@ -213,10 +218,7 @@ pub async fn replay_direct_command(
 }
 
 #[tauri::command]
-pub async fn cancel_execution(
-    state: State<'_, AppState>,
-    execution_id: String,
-) -> AppResult<bool> {
+pub async fn cancel_execution(state: State<'_, AppState>, execution_id: String) -> AppResult<bool> {
     Ok(state.execution_registry.cancel(&execution_id).await)
 }
 
@@ -289,10 +291,7 @@ pub struct ExecutionDetail {
 }
 
 #[tauri::command]
-pub async fn get_execution(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<ExecutionDetail> {
+pub async fn get_execution(state: State<'_, AppState>, id: String) -> AppResult<ExecutionDetail> {
     let conn = state.db.get()?;
 
     let summary: ExecutionSummary = conn.query_row(
@@ -376,28 +375,31 @@ async fn fetch_command_detail_inner(
         Option<String>,
         Option<String>,
         Option<i64>,
-    ) = conn.query_row(
-        "SELECT c.id, c.name, c.type, v.template, v.working_dir, v.env, v.timeout_ms
+    ) = conn
+        .query_row(
+            "SELECT c.id, c.name, c.type, v.template, v.working_dir, v.env, v.timeout_ms
          FROM commands c
          JOIN command_versions v ON v.command_id = c.id AND v.version = c.current_ver
          WHERE c.id = ?1",
-        [command_id],
-        |r| {
-            Ok((
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                r.get(3)?,
-                r.get(4)?,
-                r.get(5)?,
-                r.get(6)?,
-            ))
-        },
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("command:{command_id}")),
-        other => AppError::Database(other),
-    })?;
+            [command_id],
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                ))
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::not_found(format!("command:{command_id}"))
+            }
+            other => AppError::Database(other),
+        })?;
 
     let command_type = CommandType::parse(&type_str)
         .ok_or_else(|| AppError::other(format!("未知命令类型: {type_str}")))?;
@@ -423,11 +425,14 @@ async fn fetch_command_detail_inner(
             label: r.get(3)?,
             param_type: r.get(4)?,
             required: r.get(5)?,
-            default_value: r.get::<_, Option<String>>(6)?
+            default_value: r
+                .get::<_, Option<String>>(6)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
-            options: r.get::<_, Option<String>>(7)?
+            options: r
+                .get::<_, Option<String>>(7)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
-            validation: r.get::<_, Option<String>>(8)?
+            validation: r
+                .get::<_, Option<String>>(8)?
                 .and_then(|s| serde_json::from_str(&s).ok()),
             sensitive: r.get(9)?,
             description: r.get(10)?,

@@ -39,29 +39,30 @@ pub fn list_workflows(state: State<'_, AppState>) -> AppResult<Vec<Workflow>> {
 }
 
 #[tauri::command]
-pub fn get_workflow(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<WorkflowDetail> {
+pub fn get_workflow(state: State<'_, AppState>, id: String) -> AppResult<WorkflowDetail> {
     let conn = state.db.get()?;
 
-    let workflow: Workflow = conn.query_row(
-        "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
+    let workflow: Workflow = conn
+        .query_row(
+            "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
          FROM workflows WHERE id = ?1",
-        [&id],
-        |r| Ok(Workflow {
-            id: r.get(0)?,
-            name: r.get(1)?,
-            description: r.get(2)?,
-            enabled: r.get(3)?,
-            trigger_type: r.get(4)?,
-            created_at: r.get(5)?,
-            updated_at: r.get(6)?,
-        }),
-    ).map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("workflow:{id}")),
-        other => AppError::Database(other),
-    })?;
+            [&id],
+            |r| {
+                Ok(Workflow {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    description: r.get(2)?,
+                    enabled: r.get(3)?,
+                    trigger_type: r.get(4)?,
+                    created_at: r.get(5)?,
+                    updated_at: r.get(6)?,
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("workflow:{id}")),
+            other => AppError::Database(other),
+        })?;
 
     let mut nstmt = conn.prepare(
         "SELECT id, workflow_id, type, command_id, config, position_x, position_y, sort_order
@@ -74,7 +75,8 @@ pub fn get_workflow(
                 workflow_id: r.get(1)?,
                 node_type: r.get::<_, String>(2)?,
                 command_id: r.get(3)?,
-                config: r.get::<_, String>(4)
+                config: r
+                    .get::<_, String>(4)
                     .ok()
                     .and_then(|s| serde_json::from_str(&s).ok())
                     .unwrap_or(serde_json::Value::Null),
@@ -99,7 +101,8 @@ pub fn get_workflow(
                 target_node: r.get(3)?,
                 source_port: r.get(4)?,
                 target_port: r.get(5)?,
-                condition: r.get::<_, Option<String>>(6)?
+                condition: r
+                    .get::<_, Option<String>>(6)?
                     .and_then(|s| serde_json::from_str(&s).ok()),
             })
         })?
@@ -155,10 +158,7 @@ pub struct UpdateWorkflowInput {
 }
 
 #[tauri::command]
-pub fn update_workflow(
-    state: State<'_, AppState>,
-    input: UpdateWorkflowInput,
-) -> AppResult<()> {
+pub fn update_workflow(state: State<'_, AppState>, input: UpdateWorkflowInput) -> AppResult<()> {
     let conn = state.db.get()?;
     let now = chrono::Utc::now().timestamp();
     let tx = conn.unchecked_transaction()?;
@@ -166,10 +166,22 @@ pub fn update_workflow(
     // 顶层字段
     let mut updates: Vec<&str> = Vec::new();
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if let Some(n) = &input.name { updates.push("name = ?"); args.push(Box::new(n.clone())); }
-    if let Some(d) = &input.description { updates.push("description = ?"); args.push(Box::new(d.clone())); }
-    if let Some(e) = &input.enabled { updates.push("enabled = ?"); args.push(Box::new(*e as i32)); }
-    if let Some(t) = &input.trigger_type { updates.push("trigger_type = ?"); args.push(Box::new(t.clone())); }
+    if let Some(n) = &input.name {
+        updates.push("name = ?");
+        args.push(Box::new(n.clone()));
+    }
+    if let Some(d) = &input.description {
+        updates.push("description = ?");
+        args.push(Box::new(d.clone()));
+    }
+    if let Some(e) = &input.enabled {
+        updates.push("enabled = ?");
+        args.push(Box::new(*e as i32));
+    }
+    if let Some(t) = &input.trigger_type {
+        updates.push("trigger_type = ?");
+        args.push(Box::new(t.clone()));
+    }
     if !updates.is_empty() {
         updates.push("updated_at = ?");
         args.push(Box::new(now));
@@ -393,30 +405,30 @@ pub fn get_node_schema(type_id: String) -> AppResult<serde_json::Value> {
 
 // ==================== 内部 helper ====================
 
-async fn get_workflow_inner(
-    state: &State<'_, AppState>,
-    id: &str,
-) -> AppResult<WorkflowDetail> {
+async fn get_workflow_inner(state: &State<'_, AppState>, id: &str) -> AppResult<WorkflowDetail> {
     let conn = state.db.get()?;
 
-    let workflow: Workflow = conn.query_row(
-        "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
+    let workflow: Workflow = conn
+        .query_row(
+            "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
          FROM workflows WHERE id = ?1",
-        [id],
-        |r| Ok(Workflow {
-            id: r.get(0)?,
-            name: r.get(1)?,
-            description: r.get(2)?,
-            enabled: r.get(3)?,
-            trigger_type: r.get(4)?,
-            created_at: r.get(5)?,
-            updated_at: r.get(6)?,
-        }),
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("workflow:{id}")),
-        other => AppError::Database(other),
-    })?;
+            [id],
+            |r| {
+                Ok(Workflow {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    description: r.get(2)?,
+                    enabled: r.get(3)?,
+                    trigger_type: r.get(4)?,
+                    created_at: r.get(5)?,
+                    updated_at: r.get(6)?,
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("workflow:{id}")),
+            other => AppError::Database(other),
+        })?;
 
     let mut nstmt = conn.prepare(
         "SELECT id, workflow_id, type, command_id, config, position_x, position_y, sort_order
@@ -429,7 +441,8 @@ async fn get_workflow_inner(
                 workflow_id: r.get(1)?,
                 node_type: r.get::<_, String>(2)?,
                 command_id: r.get(3)?,
-                config: r.get::<_, String>(4)
+                config: r
+                    .get::<_, String>(4)
                     .ok()
                     .and_then(|s| serde_json::from_str(&s).ok())
                     .unwrap_or(serde_json::Value::Null),
@@ -454,7 +467,8 @@ async fn get_workflow_inner(
                 target_node: r.get(3)?,
                 source_port: r.get(4)?,
                 target_port: r.get(5)?,
-                condition: r.get::<_, Option<String>>(6)
+                condition: r
+                    .get::<_, Option<String>>(6)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),

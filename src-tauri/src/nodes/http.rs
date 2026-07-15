@@ -26,10 +26,18 @@ pub struct HttpNode;
 
 #[async_trait]
 impl Node for HttpNode {
-    fn type_id(&self) -> &'static str { "http" }
-    fn display_name(&self) -> &'static str { "HTTP" }
-    fn category(&self) -> &'static str { "io" }
-    fn description(&self) -> &'static str { "发送 HTTP 请求" }
+    fn type_id(&self) -> &'static str {
+        "http"
+    }
+    fn display_name(&self) -> &'static str {
+        "HTTP"
+    }
+    fn category(&self) -> &'static str {
+        "io"
+    }
+    fn description(&self) -> &'static str {
+        "发送 HTTP 请求"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -49,7 +57,11 @@ impl Node for HttpNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: HttpConfig = serde_json::from_value(config.clone())
             .map_err(|e| crate::error::AppError::invalid(format!("http config 解析失败: {e}")))?;
 
@@ -59,12 +71,16 @@ impl Node for HttpNode {
             interp.params.insert(k.clone(), v.clone());
         }
         let url = render_config(&Value::String(cfg.url.clone()), &interp)?
-            .as_str().map(String::from).unwrap_or_default();
+            .as_str()
+            .map(String::from)
+            .unwrap_or_default();
 
         let mut headers = HashMap::new();
         for (k, v) in &cfg.headers {
             let rv = render_config(&Value::String(v.clone()), &interp)?
-                .as_str().map(String::from).unwrap_or_default();
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default();
             headers.insert(k.clone(), rv);
         }
 
@@ -76,7 +92,9 @@ impl Node for HttpNode {
             .map_err(|e| crate::error::AppError::other(format!("构建 http client 失败: {e}")))?;
 
         let mut req = client.request(
-            cfg.method.parse().map_err(|_| crate::error::AppError::invalid(format!("无效方法: {}", cfg.method)))?,
+            cfg.method.parse().map_err(|_| {
+                crate::error::AppError::invalid(format!("无效方法: {}", cfg.method))
+            })?,
             &url,
         );
 
@@ -95,9 +113,13 @@ impl Node for HttpNode {
             }
         }
 
-        crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+        crate::nodes::node::stream_event(
+            &ctx.app,
+            &ctx.execution_id,
+            &ctx.node_id,
             crate::core::events::StreamKind::System,
-            format!("→ {} {}\n", cfg.method, url));
+            format!("→ {} {}\n", cfg.method, url),
+        );
 
         let res = req.send().await;
 
@@ -105,15 +127,20 @@ impl Node for HttpNode {
             Ok(resp) => {
                 let status = resp.status();
                 let status_code = status.as_u16();
-                let resp_headers: HashMap<String, String> = resp.headers()
+                let resp_headers: HashMap<String, String> = resp
+                    .headers()
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                     .collect();
                 let body_text = resp.text().await.unwrap_or_default();
 
-                crate::nodes::node::stream_event(&ctx.app, &ctx.execution_id, &ctx.node_id,
+                crate::nodes::node::stream_event(
+                    &ctx.app,
+                    &ctx.execution_id,
+                    &ctx.node_id,
                     crate::core::events::StreamKind::System,
-                    format!("← {} ({} bytes)\n", status, body_text.len()));
+                    format!("← {} ({} bytes)\n", status, body_text.len()),
+                );
 
                 let ok = status.is_success();
                 Ok(NodeOutput {
@@ -124,8 +151,16 @@ impl Node for HttpNode {
                         "body": body_text,
                     }),
                     stdout: body_text,
-                    status: if ok { NodeStatus::Success } else { NodeStatus::Failed },
-                    error: if !ok { Some(format!("HTTP {}", status_code)) } else { None },
+                    status: if ok {
+                        NodeStatus::Success
+                    } else {
+                        NodeStatus::Failed
+                    },
+                    error: if !ok {
+                        Some(format!("HTTP {}", status_code))
+                    } else {
+                        None
+                    },
                     ..Default::default()
                 })
             }

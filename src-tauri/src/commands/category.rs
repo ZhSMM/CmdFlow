@@ -45,7 +45,8 @@ pub async fn list_category_tree(state: State<'_, AppState>) -> AppResult<Vec<Cat
         "SELECT id, name, description, category_id, type, current_ver, tags, created_at, updated_at
          FROM commands ORDER BY name",
     )?;
-    let mut commands_by_cat: std::collections::HashMap<String, Vec<Command>> = std::collections::HashMap::new();
+    let mut commands_by_cat: std::collections::HashMap<String, Vec<Command>> =
+        std::collections::HashMap::new();
     let mut root_commands: Vec<Command> = Vec::new();
     let rows = cmd_stmt.query_map([], |r| {
         let tags_json: String = r.get(6)?;
@@ -186,10 +187,7 @@ pub struct MoveCategoryInput {
 }
 
 #[tauri::command]
-pub async fn move_category(
-    state: State<'_, AppState>,
-    input: MoveCategoryInput,
-) -> AppResult<()> {
+pub async fn move_category(state: State<'_, AppState>, input: MoveCategoryInput) -> AppResult<()> {
     // 不能把分类移到自己的后代
     if let Some(pid) = &input.new_parent_id {
         let conn = state.db.get()?;
@@ -255,7 +253,9 @@ pub async fn reorder_categories(
     let conn = state.db.get()?;
     let tx = conn.unchecked_transaction()?;
     for (i, id) in input.ordered_ids.iter().enumerate() {
-        if id == "__root__" { continue; }
+        if id == "__root__" {
+            continue;
+        }
         tx.execute(
             "UPDATE categories SET sort_order = ?1 WHERE id = ?2",
             rusqlite::params![i as i32, id],
@@ -284,7 +284,9 @@ fn compute_depth(conn: &rusqlite::Connection, id: &str) -> AppResult<i32> {
             Some(p) => {
                 cur = p;
                 depth += 1;
-                if depth > 10 { return Ok(depth); }
+                if depth > 10 {
+                    return Ok(depth);
+                }
             }
             None => break,
         }
@@ -311,10 +313,14 @@ fn is_descendant_of(
         };
         match parent {
             Some(p) => {
-                if p == ancestor { return Ok(true); }
+                if p == ancestor {
+                    return Ok(true);
+                }
                 cur = p;
                 depth += 1;
-                if depth > 10 { return Ok(false); }
+                if depth > 10 {
+                    return Ok(false);
+                }
             }
             None => return Ok(false),
         }

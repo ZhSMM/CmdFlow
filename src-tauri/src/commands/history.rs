@@ -105,8 +105,9 @@ pub async fn get_history_detail(
 ) -> AppResult<HistoryDetail> {
     let conn = state.db.get()?;
 
-    let summary: HistorySummary = conn.query_row(
-        "SELECT e.id, e.workflow_id,
+    let summary: HistorySummary = conn
+        .query_row(
+            "SELECT e.id, e.workflow_id,
                 COALESCE(c.name, w.name, '?') as workflow_name,
                 e.trigger, e.status,
                 e.started_at, e.finished_at, e.duration_ms, e.error
@@ -114,28 +115,36 @@ pub async fn get_history_detail(
          LEFT JOIN workflows w ON w.id = e.workflow_id
          LEFT JOIN commands  c ON c.id = e.workflow_id
          WHERE e.id = ?1",
-        [&id],
-        |r| Ok(HistorySummary {
-            id: r.get(0)?,
-            workflow_id: r.get(1)?,
-            workflow_name: r.get(2)?,
-            trigger: r.get(3)?,
-            status: r.get(4)?,
-            started_at: r.get(5)?,
-            finished_at: r.get(6)?,
-            duration_ms: r.get(7)?,
-            error: r.get(8)?,
-        }),
-    ).map_err(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("execution:{id}")),
-        other => AppError::Database(other),
-    })?;
+            [&id],
+            |r| {
+                Ok(HistorySummary {
+                    id: r.get(0)?,
+                    workflow_id: r.get(1)?,
+                    workflow_name: r.get(2)?,
+                    trigger: r.get(3)?,
+                    status: r.get(4)?,
+                    started_at: r.get(5)?,
+                    finished_at: r.get(6)?,
+                    duration_ms: r.get(7)?,
+                    error: r.get(8)?,
+                })
+            },
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => AppError::not_found(format!("execution:{id}")),
+            other => AppError::Database(other),
+        })?;
 
     let (input_params_str, rendered_template): (Option<String>, Option<String>) = conn
         .query_row(
             "SELECT input_params, rendered_template FROM executions WHERE id = ?1",
             [&id],
-            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)),
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
         )
         .unwrap_or((None, None));
     let input_params = input_params_str.and_then(|s| serde_json::from_str(&s).ok());
@@ -181,11 +190,13 @@ pub async fn replay_execution(
 ) -> AppResult<String> {
     // 1. 读历史 execution
     let conn = state.db.get()?;
-    let (workflow_id, input_params_str,): (String, Option<String>) = conn.query_row(
-        "SELECT workflow_id, input_params FROM executions WHERE id = ?1",
-        [&execution_id],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    ).map_err(|_| AppError::not_found(format!("execution:{execution_id}")))?;
+    let (workflow_id, input_params_str): (String, Option<String>) = conn
+        .query_row(
+            "SELECT workflow_id, input_params FROM executions WHERE id = ?1",
+            [&execution_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| AppError::not_found(format!("execution:{execution_id}")))?;
     drop(conn);
 
     // workflow_id 字段既存 workflow 也存 command (Phase 1 设计)
@@ -252,8 +263,17 @@ pub async fn replay_execution(
 
     tokio::spawn(async move {
         let res = crate::core::dag_executor::execute_workflow(
-            app2, db2, exec_id3.clone(), wf_id, wf_name, nodes, edges, input_params, cancel,
-        ).await;
+            app2,
+            db2,
+            exec_id3.clone(),
+            wf_id,
+            wf_name,
+            nodes,
+            edges,
+            input_params,
+            cancel,
+        )
+        .await;
         if let Ok(conn) = db3.get() {
             match res {
                 Ok(r) => {
@@ -298,8 +318,8 @@ pub struct StatusBucket {
 pub async fn get_history_stats(state: State<'_, AppState>) -> AppResult<HistoryStats> {
     let conn = state.db.get()?;
 
-    let (total, success, failed, running, avg_duration, last_24h): (i64, i64, i64, i64, i64, i64) = conn
-        .query_row(
+    let (total, success, failed, running, avg_duration, last_24h): (i64, i64, i64, i64, i64, i64) =
+        conn.query_row(
             "SELECT
                 COUNT(*),
                 COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0),
@@ -309,14 +329,27 @@ pub async fn get_history_stats(state: State<'_, AppState>) -> AppResult<HistoryS
                 COALESCE(SUM(CASE WHEN started_at > ?1 THEN 1 ELSE 0 END), 0)
              FROM executions",
             rusqlite::params![chrono::Utc::now().timestamp() - 86400],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            },
         )?;
 
-    let mut stmt = conn.prepare(
-        "SELECT status, COUNT(*) as c FROM executions GROUP BY status ORDER BY c DESC",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT status, COUNT(*) as c FROM executions GROUP BY status ORDER BY c DESC")?;
     let by_status: Vec<StatusBucket> = stmt
-        .query_map([], |r| Ok(StatusBucket { status: r.get(0)?, count: r.get(1)? }))?
+        .query_map([], |r| {
+            Ok(StatusBucket {
+                status: r.get(0)?,
+                count: r.get(1)?,
+            })
+        })?
         .filter_map(Result::ok)
         .collect();
 

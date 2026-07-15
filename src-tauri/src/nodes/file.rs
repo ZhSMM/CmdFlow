@@ -26,10 +26,18 @@ pub struct FileNode;
 
 #[async_trait]
 impl Node for FileNode {
-    fn type_id(&self) -> &'static str { "file" }
-    fn display_name(&self) -> &'static str { "文件" }
-    fn category(&self) -> &'static str { "io" }
-    fn description(&self) -> &'static str { "文件读写操作" }
+    fn type_id(&self) -> &'static str {
+        "file"
+    }
+    fn display_name(&self) -> &'static str {
+        "文件"
+    }
+    fn category(&self) -> &'static str {
+        "io"
+    }
+    fn description(&self) -> &'static str {
+        "文件读写操作"
+    }
 
     fn config_schema(&self) -> Value {
         json!({
@@ -49,7 +57,11 @@ impl Node for FileNode {
         })
     }
 
-    async fn execute(&self, ctx: NodeContext, config: Value) -> crate::error::AppResult<NodeOutput> {
+    async fn execute(
+        &self,
+        ctx: NodeContext,
+        config: Value,
+    ) -> crate::error::AppResult<NodeOutput> {
         let cfg: FileConfig = serde_json::from_value(config.clone())
             .map_err(|e| crate::error::AppError::invalid(format!("file config 解析失败: {e}")))?;
 
@@ -74,7 +86,8 @@ impl Node for FileNode {
         match cfg.action.as_str() {
             "read" => {
                 let p = src.ok_or_else(|| crate::error::AppError::invalid("file.read 需要 src"))?;
-                let content = tokio::fs::read_to_string(&p).await
+                let content = tokio::fs::read_to_string(&p)
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("读取失败: {e}")))?;
                 Ok(NodeOutput::success(json!({
                     "content": content,
@@ -83,12 +96,14 @@ impl Node for FileNode {
                 })))
             }
             "write" => {
-                let p = dst.ok_or_else(|| crate::error::AppError::invalid("file.write 需要 dst"))?;
+                let p =
+                    dst.ok_or_else(|| crate::error::AppError::invalid("file.write 需要 dst"))?;
                 if let Some(parent) = p.parent() {
                     tokio::fs::create_dir_all(parent).await.ok();
                 }
                 let content = cfg.content.unwrap_or_default();
-                tokio::fs::write(&p, &content).await
+                tokio::fs::write(&p, &content)
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("写入失败: {e}")))?;
                 Ok(NodeOutput::success(json!({
                     "path": p.to_string_lossy(),
@@ -99,42 +114,60 @@ impl Node for FileNode {
                 let s = src.ok_or_else(|| crate::error::AppError::invalid("file.copy 需要 src"))?;
                 let d = dst.ok_or_else(|| crate::error::AppError::invalid("file.copy 需要 dst"))?;
                 tokio::fs::create_dir_all(d.parent().unwrap()).await.ok();
-                tokio::fs::copy(&s, &d).await
+                tokio::fs::copy(&s, &d)
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("复制失败: {e}")))?;
-                Ok(NodeOutput::success(json!({ "src": s.to_string_lossy(), "dst": d.to_string_lossy() })))
+                Ok(NodeOutput::success(
+                    json!({ "src": s.to_string_lossy(), "dst": d.to_string_lossy() }),
+                ))
             }
             "move" => {
                 let s = src.ok_or_else(|| crate::error::AppError::invalid("file.move 需要 src"))?;
                 let d = dst.ok_or_else(|| crate::error::AppError::invalid("file.move 需要 dst"))?;
                 tokio::fs::create_dir_all(d.parent().unwrap()).await.ok();
-                tokio::fs::rename(&s, &d).await
+                tokio::fs::rename(&s, &d)
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("移动失败: {e}")))?;
-                Ok(NodeOutput::success(json!({ "src": s.to_string_lossy(), "dst": d.to_string_lossy() })))
+                Ok(NodeOutput::success(
+                    json!({ "src": s.to_string_lossy(), "dst": d.to_string_lossy() }),
+                ))
             }
             "delete" => {
-                let p = src.ok_or_else(|| crate::error::AppError::invalid("file.delete 需要 src"))?;
+                let p =
+                    src.ok_or_else(|| crate::error::AppError::invalid("file.delete 需要 src"))?;
                 let meta = tokio::fs::metadata(&p).await;
                 match meta {
-                    Ok(m) if m.is_dir() => tokio::fs::remove_dir_all(&p).await
+                    Ok(m) if m.is_dir() => tokio::fs::remove_dir_all(&p)
+                        .await
                         .map_err(|e| crate::error::AppError::other(format!("删除目录失败: {e}")))?,
-                    Ok(_) => tokio::fs::remove_file(&p).await
+                    Ok(_) => tokio::fs::remove_file(&p)
+                        .await
                         .map_err(|e| crate::error::AppError::other(format!("删除文件失败: {e}")))?,
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                     Err(e) => return Ok(NodeOutput::failed(format!("stat 失败: {e}"))),
                 }
-                Ok(NodeOutput::success(json!({ "deleted": p.to_string_lossy() })))
+                Ok(NodeOutput::success(
+                    json!({ "deleted": p.to_string_lossy() }),
+                ))
             }
             "exists" => {
-                let p = src.ok_or_else(|| crate::error::AppError::invalid("file.exists 需要 src"))?;
+                let p =
+                    src.ok_or_else(|| crate::error::AppError::invalid("file.exists 需要 src"))?;
                 let exists = p.exists();
-                Ok(NodeOutput::success(json!({ "exists": exists, "path": p.to_string_lossy() })))
+                Ok(NodeOutput::success(
+                    json!({ "exists": exists, "path": p.to_string_lossy() }),
+                ))
             }
             "list" => {
-                let dir = src.ok_or_else(|| crate::error::AppError::invalid("file.list 需要 src"))?;
-                let mut entries = tokio::fs::read_dir(&dir).await
+                let dir =
+                    src.ok_or_else(|| crate::error::AppError::invalid("file.list 需要 src"))?;
+                let mut entries = tokio::fs::read_dir(&dir)
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("读取目录失败: {e}")))?;
                 let mut files = Vec::new();
-                while let Some(e) = entries.next_entry().await
+                while let Some(e) = entries
+                    .next_entry()
+                    .await
                     .map_err(|e| crate::error::AppError::other(format!("遍历目录失败: {e}")))?
                 {
                     files.push(json!({
@@ -142,7 +175,9 @@ impl Node for FileNode {
                         "is_dir": e.file_type().await.map(|t| t.is_dir()).unwrap_or(false),
                     }));
                 }
-                Ok(NodeOutput::success(json!({ "files": files, "count": files.len() })))
+                Ok(NodeOutput::success(
+                    json!({ "files": files, "count": files.len() }),
+                ))
             }
             other => Ok(NodeOutput {
                 status: NodeStatus::Failed,

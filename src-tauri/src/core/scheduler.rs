@@ -13,7 +13,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, Timelike, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Timelike, Utc};
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -74,10 +74,7 @@ pub fn validate_cron(cron_expr: &str) -> AppResult<()> {
 }
 
 /// 调度器主循环
-pub async fn run_scheduler_loop(
-    app: AppHandle,
-    db: Arc<DbPool>,
-) {
+pub async fn run_scheduler_loop(app: AppHandle, db: Arc<DbPool>) {
     let mut tick = interval(Duration::from_secs(30));
     tick.tick().await; // 跳过首次立即 tick
 
@@ -123,7 +120,11 @@ async fn scan_and_trigger(app: &AppHandle, db: &Arc<DbPool>) -> AppResult<()> {
     };
 
     for sched in schedules {
-        tracing::info!("触发调度: schedule={}, workflow={}", sched.id, sched.workflow_id);
+        tracing::info!(
+            "触发调度: schedule={}, workflow={}",
+            sched.id,
+            sched.workflow_id
+        );
         if let Err(e) = trigger_one(app.clone(), db, &sched, now).await {
             tracing::error!("调度触发失败 {}: {e}", sched.id);
         }
@@ -140,9 +141,8 @@ async fn refresh_next_runs(db: &DbPool) -> AppResult<()> {
     let now_ts = now.timestamp();
 
     let conn = db.get()?;
-    let mut stmt = conn.prepare(
-        "SELECT id, cron_expr, next_run_at FROM schedules WHERE enabled = 1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, cron_expr, next_run_at FROM schedules WHERE enabled = 1")?;
     let rows: Vec<(String, String, Option<i64>)> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
         .filter_map(Result::ok)
@@ -182,15 +182,17 @@ async fn trigger_one(
             "SELECT id, name, description, enabled, trigger_type, created_at, updated_at
              FROM workflows WHERE id = ?1",
             [&sched.workflow_id],
-            |r| Ok(Workflow {
-                id: r.get(0)?,
-                name: r.get(1)?,
-                description: r.get(2)?,
-                enabled: r.get(3)?,
-                trigger_type: r.get(4)?,
-                created_at: r.get(5)?,
-                updated_at: r.get(6)?,
-            }),
+            |r| {
+                Ok(Workflow {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    description: r.get(2)?,
+                    enabled: r.get(3)?,
+                    trigger_type: r.get(4)?,
+                    created_at: r.get(5)?,
+                    updated_at: r.get(6)?,
+                })
+            },
         )
         .ok()
     };
@@ -212,7 +214,10 @@ async fn trigger_one(
 
     // 注册执行 ID
     let execution_id = uuid::Uuid::new_v4().to_string();
-    let registry = app.state::<crate::state::AppState>().execution_registry.clone();
+    let registry = app
+        .state::<crate::state::AppState>()
+        .execution_registry
+        .clone();
     let cancel = registry.register(execution_id.clone()).await;
 
     // 写 executions
@@ -315,7 +320,11 @@ pub fn describe_cron(cron_expr: &str) -> String {
         return format!("每 {} 分钟", min.trim_start_matches("*/"));
     }
     if dom == "*" && mon == "*" && dow == "*" && min != "*" && hour != "*" {
-        return format!("每天 {:02}:{:02}", hour.parse::<u32>().unwrap_or(0), min.parse::<u32>().unwrap_or(0));
+        return format!(
+            "每天 {:02}:{:02}",
+            hour.parse::<u32>().unwrap_or(0),
+            min.parse::<u32>().unwrap_or(0)
+        );
     }
     cron_expr.to_string()
 }

@@ -55,10 +55,7 @@ pub struct WorkflowYamlEdge {
 }
 
 #[tauri::command]
-pub async fn export_workflow(
-    state: State<'_, AppState>,
-    id: String,
-) -> AppResult<String> {
+pub async fn export_workflow(state: State<'_, AppState>, id: String) -> AppResult<String> {
     let detail = crate::storage::models::WorkflowDetail::load_full(&state.db, &id)?
         .ok_or_else(|| AppError::not_found(format!("workflow: {id}")))?;
 
@@ -70,19 +67,30 @@ pub async fn export_workflow(
             description: detail.workflow.description.clone(),
             trigger: Some(detail.workflow.trigger_type.clone()),
         },
-        nodes: detail.nodes.iter().map(|n| WorkflowYamlNode {
-            id: n.id.clone(),
-            node_type: n.node_type.clone(),
-            command_ref: n.command_id.clone(),
-            config: n.config.clone(),
-            position: Some(Position { x: n.position_x, y: n.position_y }),
-        }).collect(),
-        edges: detail.edges.iter().map(|e| WorkflowYamlEdge {
-            from: e.source_node.clone(),
-            to: e.target_node.clone(),
-            label: None,
-            condition: e.condition.clone(),
-        }).collect(),
+        nodes: detail
+            .nodes
+            .iter()
+            .map(|n| WorkflowYamlNode {
+                id: n.id.clone(),
+                node_type: n.node_type.clone(),
+                command_ref: n.command_id.clone(),
+                config: n.config.clone(),
+                position: Some(Position {
+                    x: n.position_x,
+                    y: n.position_y,
+                }),
+            })
+            .collect(),
+        edges: detail
+            .edges
+            .iter()
+            .map(|e| WorkflowYamlEdge {
+                from: e.source_node.clone(),
+                to: e.target_node.clone(),
+                label: None,
+                condition: e.condition.clone(),
+            })
+            .collect(),
     };
 
     let yaml = serde_yaml::to_string(&yaml_doc)
@@ -97,14 +105,14 @@ pub struct ImportResult {
 }
 
 #[tauri::command]
-pub async fn import_workflow(
-    state: State<'_, AppState>,
-    yaml: String,
-) -> AppResult<ImportResult> {
-    let doc: WorkflowYaml = serde_yaml::from_str(&yaml)
-        .map_err(|e| AppError::other(format!("YAML 解析失败: {e}")))?;
+pub async fn import_workflow(state: State<'_, AppState>, yaml: String) -> AppResult<ImportResult> {
+    let doc: WorkflowYaml =
+        serde_yaml::from_str(&yaml).map_err(|e| AppError::other(format!("YAML 解析失败: {e}")))?;
     if doc.kind != "workflow" {
-        return Err(AppError::other(format!("不支持的 kind: {} (期望 workflow)", doc.kind)));
+        return Err(AppError::other(format!(
+            "不支持的 kind: {} (期望 workflow)",
+            doc.kind
+        )));
     }
 
     // 1. 创建工作流
@@ -134,7 +142,11 @@ pub async fn import_workflow(
         } else {
             n.id.clone()
         };
-        let (px, py) = n.position.as_ref().map(|p| (p.x, p.y)).unwrap_or((0.0, 0.0));
+        let (px, py) = n
+            .position
+            .as_ref()
+            .map(|p| (p.x, p.y))
+            .unwrap_or((0.0, 0.0));
         tx.execute(
             "INSERT INTO nodes (id, workflow_id, type, command_id, config, position_x, position_y, sort_order)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",

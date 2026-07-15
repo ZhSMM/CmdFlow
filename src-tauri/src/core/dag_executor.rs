@@ -34,7 +34,7 @@ pub struct WorkflowExecution {
 /// 边条件
 #[derive(Debug, Clone, Default)]
 struct EdgeCondition {
-    kind: String, // on_success | on_failure | always | expr
+    kind: String,          // on_success | on_failure | always | expr
     branches: Vec<String>, // 期望的 source 输出端口
 }
 
@@ -42,9 +42,16 @@ impl EdgeCondition {
     fn from_value(v: &Value) -> Self {
         let mut ec = EdgeCondition::default();
         if let Some(obj) = v.as_object() {
-            ec.kind = obj.get("type").and_then(|v| v.as_str()).unwrap_or("on_success").to_string();
+            ec.kind = obj
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("on_success")
+                .to_string();
             if let Some(arr) = obj.get("branches").and_then(|v| v.as_array()) {
-                ec.branches = arr.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+                ec.branches = arr
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect();
             }
         }
         ec
@@ -114,9 +121,10 @@ pub async fn execute_workflow(
     let outgoing: HashMap<String, Vec<(String, EdgeCondition)>> = {
         let mut m: HashMap<String, Vec<(String, EdgeCondition)>> = HashMap::new();
         for e in &edges {
-            m.entry(e.source_node.clone())
-                .or_default()
-                .push((e.target_node.clone(), EdgeCondition::from_value(&e.condition.clone().unwrap_or(Value::Null))));
+            m.entry(e.source_node.clone()).or_default().push((
+                e.target_node.clone(),
+                EdgeCondition::from_value(&e.condition.clone().unwrap_or(Value::Null)),
+            ));
         }
         m
     };
@@ -175,7 +183,8 @@ pub async fn execute_workflow(
                     node_outputs2,
                     node_statuses2,
                     cancel2,
-                ).await
+                )
+                .await
             });
 
             handles.push((node_id, handle));
@@ -183,7 +192,9 @@ pub async fn execute_workflow(
 
         // 收集结果, 更新 indeg + queue
         for (node_id, h) in handles {
-            let res = h.await.map_err(|e| AppError::other(format!("join 失败: {e}")))?;
+            let res = h
+                .await
+                .map_err(|e| AppError::other(format!("join 失败: {e}")))?;
             match res {
                 Ok(output) => {
                     // 存数据
@@ -265,7 +276,11 @@ pub async fn execute_workflow(
             execution_id: execution_id.clone(),
             status: final_status,
             duration_ms,
-            error: if had_failure { Some("部分节点失败".into()) } else { None },
+            error: if had_failure {
+                Some("部分节点失败".into())
+            } else {
+                None
+            },
         },
     );
 
@@ -328,14 +343,7 @@ async fn run_one_node(
     };
 
     // 持久化 node_run
-    let _ = persist_node_run(
-        &db,
-        &execution_id,
-        &node,
-        &output,
-        started_at,
-        duration_ms,
-    ).await;
+    let _ = persist_node_run(&db, &execution_id, &node, &output, started_at, duration_ms).await;
 
     // 推结束事件
     emit(
@@ -352,9 +360,9 @@ async fn run_one_node(
     if output.status == NodeStatus::Success {
         Ok(output)
     } else {
-        Err(AppError::other(
-            output.error.clone().unwrap_or_else(|| format!("节点失败: {:?}", output.status)),
-        ))
+        Err(AppError::other(output.error.clone().unwrap_or_else(|| {
+            format!("节点失败: {:?}", output.status)
+        })))
     }
 }
 
@@ -393,10 +401,7 @@ async fn persist_node_run(
     Ok(())
 }
 
-fn topological_sort(
-    nodes: &[WorkflowNode],
-    edges: &[WorkflowEdge],
-) -> AppResult<Vec<String>> {
+fn topological_sort(nodes: &[WorkflowNode], edges: &[WorkflowEdge]) -> AppResult<Vec<String>> {
     let node_ids: HashSet<String> = nodes.iter().map(|n| n.id.clone()).collect();
 
     let mut indeg: HashMap<String, usize> = HashMap::new();
