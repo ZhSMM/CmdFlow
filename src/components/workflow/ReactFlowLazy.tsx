@@ -6,11 +6,11 @@ import type {
   NodeChange,
   EdgeChange,
   ReactFlowProps,
-} from "reactflow";
+} from "@xyflow/react";
 // CSS 静态 import: vite 会把它注入 <link> 标签, 避免动态 import 在 dev mode
 // 下不生效 (症状: minimap 显示成三条横线、节点 cursor 不会变 grab)
-// reactflow 体积大, 但 CSS 不大, 静态 import 没问题
-import "reactflow/dist/style.css";
+// @xyflow/react 体积大, 但 CSS 不大, 静态 import 没问题
+import "@xyflow/react/dist/style.css";
 
 interface ReactFlowLazyProps {
   nodes: Node[];
@@ -33,11 +33,11 @@ interface ReactFlowLazyProps {
  * CSS 必须静态 import, 否则 dev mode 下样式可能丢失。
  */
 export function ReactFlowLazy(props: ReactFlowLazyProps) {
-  const [mod, setMod] = useState<typeof import("reactflow") | null>(null);
+  const [mod, setMod] = useState<typeof import("@xyflow/react") | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    import("reactflow").then((m) => {
+    import("@xyflow/react").then((m) => {
       if (!cancelled) setMod(m);
     });
     return () => {
@@ -53,7 +53,7 @@ export function ReactFlowLazy(props: ReactFlowLazyProps) {
     );
   }
 
-  const RF = mod.default;
+  const RF = mod.ReactFlow;
   const { Background, Controls, MiniMap } = mod;
 
   return (

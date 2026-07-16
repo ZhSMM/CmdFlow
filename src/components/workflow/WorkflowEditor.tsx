@@ -10,7 +10,7 @@ import {
   type NodeChange,
   type EdgeChange,
   type Connection,
-} from "reactflow";
+} from "@xyflow/react";
 import { Save, Play, CheckCircle2, XCircle, AlertTriangle, Loader2, Download } from "lucide-react";
 import { api, type WorkflowEdge as WfEdge, TauriError } from "@/lib/tauri";
 import { Button } from "@/components/ui/Button";

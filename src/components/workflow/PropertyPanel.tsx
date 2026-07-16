@@ -2,7 +2,7 @@ import { Trash2 } from "lucide-react";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Label } from "@/components/ui/Label";
-import type { Edge, Node } from "reactflow";
+import type { Edge, Node } from "@xyflow/react";
 
 interface NodeTypeMeta {
   type_id: string;
@@ -64,9 +64,9 @@ export function PropertyPanel({
             <Label>触发条件</Label>
             <select
               className="flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs"
-              value={edge.data?.condition?.type || "on_success"}
+              value={(edge.data?.condition as any)?.type || "on_success"}
               onChange={(e) => {
-                const newCond = { ...(edge.data?.condition || {}), type: e.target.value };
+                const newCond = { ...((edge.data?.condition as any) || {}), type: e.target.value };
                 onUpdateEdge(edge.id, { condition: newCond });
               }}
             >
@@ -85,7 +85,7 @@ export function PropertyPanel({
     if (!meta) {
       return (
         <div className="w-72 border-l bg-card p-4 text-xs text-destructive">
-          未知节点类型: {node.data.type_id}
+          未知节点类型: {String(node.data.type_id)}
         </div>
       );
     }
