@@ -68,6 +68,13 @@ export function ReactFlowLazy(props: ReactFlowLazyProps) {
       onPaneClick={props.onPaneClick}
       nodesDraggable={props.nodesDraggable ?? true}
       elementsSelectable={props.elementsSelectable ?? true}
+      // @xyflow/react v12 内部仍用 d3-drag, d3-drag 的 'start' event
+      // 会在 mousedown 立即触发 startDrag 当且仅当 nodeDragThreshold === 0.
+      // v12 默认不传这个 prop (undefined), 而 drag event 里的
+      //   if (distance > nodeDragThreshold) startDrag()
+      // 会因为 `distance > undefined` 永远 false, 节点拖动永远不响应.
+      // 显式设 0 让 mousedown 立即进入 drag 状态.
+      nodeDragThreshold={0}
       // 关键: 把 pane 平移限制到中键/右键 (0=左 1=中 2=右),
       // 否则左键拖动空地会被当成平移, 节点拖动会被干扰
       panOnDrag={[1, 2]}
