@@ -128,6 +128,7 @@ migrations/                      跟 src-tauri/migrations/ 同步, 通过 includ
 |---|---|---|
 | `WebviewWindowBuilder::transparent(true)` 编译失败 | macOS 是私有 API | `Cargo.toml` 加 `features = ["macos-private-api"]`, `tauri.conf.json` 加 `app.macOSPrivateApi: true` |
 | 节点 hover grab 但 click 不响应 | reactflow 11 d3-drag 的 mouseup `preventDefault` 阻止 click dispatch | **必须用 @xyflow/react v12+**, v11 修不了 |
+| 节点 click OK 但拖动不响应 | v12 默认 `nodeDragThreshold=undefined`, d3-drag 'drag' 事件里 `distance > undefined` 永远 false → startDrag 永远不调用 | **必须显式 `nodeDragThreshold={0}`** 给 ReactFlow, 让 mousedown 立即进 drag 状态 |
 | macOS runner 卡 queue 11+ 小时 | GitHub Actions 紧缺 | 接受只发 3 平台 (Win/Linux/macOS-ARM), 取消 macos-13 job |
 | `icons/icon.ico` not found | tauri-build 找不到 Windows 图标 | `pnpm exec tauri icon` 从源图标生成所有平台 |
 | React 18 + StrictMode double mount | useEffect 跑两次 | dev mode 才发生, 生产构建没事 |
